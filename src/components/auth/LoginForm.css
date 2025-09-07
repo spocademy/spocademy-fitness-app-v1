@@ -1,0 +1,253 @@
+/* src/components/auth/LoginForm.css */
+
+.login-container {
+  min-height: 100vh;
+  background: #f8f9fa;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding: 20px 0;
+}
+
+/* Floating language toggle */
+.lang-toggle-floating {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 127, 255, 0.9);
+  border: none;
+  color: white;
+  padding: 12px 18px;
+  border-radius: 25px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 48px;
+  min-width: 48px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 127, 255, 0.3);
+  z-index: 100;
+}
+
+.lang-toggle-floating:hover {
+  background: rgba(0, 127, 255, 1);
+  transform: scale(1.05);
+}
+
+.login-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 24px;
+  max-width: 400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.brand-logo {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.brand-logo h1 {
+  font-size: 32px;
+  font-weight: 800;
+  color: #007fff;
+  margin-bottom: 8px;
+}
+
+.brand-logo p {
+  color: #6c757d;
+  font-size: 16px;
+  margin: 0;
+}
+
+/* Logo container with white circle background */
+.logo-container {
+  width: 120px;
+  height: 120px;
+  background: white;
+  border-radius: 50%;
+  margin: 0 auto 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+  border: 3px solid #f8f9fa;
+}
+
+.logo-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  color: #4d4d4d;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 16px;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  font-size: 16px;
+  transition: border-color 0.2s;
+  min-height: 56px;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #007fff;
+  box-shadow: 0 0 0 3px rgba(0, 127, 255, 0.1);
+}
+
+.form-group input:disabled {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #f5c6cb;
+  font-size: 14px;
+  text-align: center;
+}
+
+.btn-primary {
+  width: 100%;
+  background: #007fff;
+  color: white;
+  border: none;
+  padding: 18px 24px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 56px;
+  margin-bottom: 20px;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #0066cc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 127, 255, 0.3);
+}
+
+.btn-primary:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.help-text {
+  text-align: center;
+}
+
+.help-text p {
+  font-size: 14px;
+  color: #6c757d;
+  margin: 0;
+}
+
+.whatsapp-float {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  width: 60px;
+  height: 60px;
+  background: #25d366;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 28px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(37, 211, 102, 0.3);
+  z-index: 1000;
+  transition: transform 0.2s;
+}
+
+.whatsapp-float:hover {
+  transform: scale(1.1);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 10px 0;
+  }
+  
+  .login-form {
+    padding: 16px;
+  }
+  
+  .brand-logo h1 {
+    font-size: 28px;
+  }
+  
+  .logo-container {
+    width: 100px;
+    height: 100px;
+    padding: 12px;
+  }
+  
+  .lang-toggle-floating {
+    top: 15px;
+    right: 15px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  
+  .whatsapp-float {
+    bottom: 20px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    font-size: 24px;
+  }
+}
+
+/* Enhanced focus states for accessibility */
+.lang-toggle-floating:focus,
+.btn-primary:focus,
+.form-group input:focus {
+  box-shadow: 0 0 0 3px rgba(0, 127, 255, 0.25);
+}
+
+/* Better spacing for wide logos */
+@media (max-width: 360px) {
+  .logo-container {
+    width: 90px;
+    height: 90px;
+    padding: 10px;
+  }
+}
+.form-group input::placeholder {
+  color: #9ca3af;
+  opacity: 0.7;
+}
+
+.form-group input::-webkit-input-placeholder {
+  color: #9ca3af;
+  opacity: 0.6;
+}

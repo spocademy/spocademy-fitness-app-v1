@@ -1,0 +1,465 @@
+/* src/components/dashboard/Homepage.css */
+
+.homepage-container {
+  min-height: 100vh;
+  background: #f8f9fa;
+  display: flex;
+  flex-direction: column;
+}
+
+.homepage-header {
+  background: #007fff;
+  color: white;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-info h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+}
+
+.village-info {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.lang-toggle {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  padding: 12px 18px;
+  border-radius: 25px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 48px;
+  min-width: 48px;
+  transition: all 0.2s;
+}
+
+.lang-toggle:active {
+  background: rgba(255, 255, 255, 0.4);
+  transform: scale(0.95);
+}
+
+.homepage-content {
+  flex: 1;
+  padding: 20px;
+  max-width: 400px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Top Stats Row */
+.stats-row {
+  display: flex;
+  gap: 12px;
+}
+
+.stat-box {
+  flex: 1;
+  background: white;
+  padding: 16px;
+  border-radius: 12px;
+  border: 2px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stat-box.streak {
+  background: linear-gradient(135deg, #fff8f0, #ffffff);
+  border-color: #fd7e14;
+}
+
+.stat-icon {
+  font-size: 28px;
+}
+
+.stat-content {
+  text-align: left;
+}
+
+.stat-number {
+  font-size: 24px;
+  font-weight: 800;
+  color: #007fff;
+  line-height: 1;
+}
+
+.stat-box.streak .stat-number {
+  color: #fd7e14;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #6c757d;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* Horizontal Training Path - Netflix Style */
+.training-path {
+  flex: 1;
+  min-height: 200px;
+}
+
+.path-container {
+  display: flex;
+  gap: 15px;
+  overflow-x: auto;
+  padding: 20px 0;
+  scroll-behavior: smooth;
+}
+
+.path-container::-webkit-scrollbar {
+  display: none;
+}
+
+.path-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Day Cards - Netflix Style */
+.day-card {
+  flex-shrink: 0;
+  width: 160px; /* Increased from 140px */
+  background: white;
+  border-radius: 16px; /* Slightly more rounded */
+  padding: 20px; /* More padding */
+  border: 2px solid #e9ecef;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  min-height: 180px; /* Fixed height for consistency */
+  justify-content: space-between;
+}
+
+.day-card.completed {
+  border-color: #28a745;
+  background: linear-gradient(135deg, #f8fff8, #ffffff);
+}
+
+.day-card.current {
+  width: 180px; /* Even bigger for current */
+  border-color: #007fff;
+  background: linear-gradient(135deg, #f0f8ff, #ffffff);
+  transform: scale(1.05);
+  animation: pulse-card 2s infinite;
+  min-height: 200px;
+}
+
+.day-card.locked {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f8f9fa;
+}
+
+@keyframes pulse-card {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(0, 127, 255, 0.2);
+    transform: scale(1.05);
+  }
+  50% {
+    box-shadow: 0 8px 24px rgba(0, 127, 255, 0.4);
+    transform: scale(1.1);
+  }
+}
+
+/* Day Circles */
+.day-circle {
+  width: 85px;
+  height: 85px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px; /* Bigger font */
+  margin-bottom: 12px; /* More space */
+  transition: all 0.3s;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.day-card.current .day-circle {
+  width: 95px;
+  height: 95px;
+  font-size: 18px !important; /* Even bigger for current */
+}
+
+.day-card.completed .day-circle {
+  background: #28a745;
+  color: white;
+}
+
+.day-card.current .day-circle {
+  background: #007fff;
+  color: white;
+}
+
+.day-card.locked .day-circle {
+  background: #e9ecef;
+  color: #6c757d;
+}
+
+/* Remove day labels and pulse-circle animation */
+
+/* Day Labels - Removed since text is now in circle */
+
+/* Action Button */
+.action-button {
+  background: #007fff;
+  color: white;
+  padding: 10px 16px; /* More padding */
+  border-radius: 20px; /* More rounded */
+  font-size: 14px !important;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  width: 85%; /* Not full width - leaves breathing room */
+  margin-top: auto; /* Push to bottom */
+}
+
+.action-button:active {
+  transform: scale(0.95);
+  background: #0066cc;
+}
+
+/* Status Text */
+.status-text {
+  font-size: 12px; /* Slightly bigger */
+  font-weight: 500;
+  padding: 6px 12px; /* More padding */
+  border-radius: 12px;
+  text-align: center;
+  width: 85%; /* Match button width */
+  margin-top: auto;
+}
+
+.status-text.completed {
+  background: #e8f5e8;
+  color: #28a745;
+}
+
+.status-text.locked {
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+/* Village Section - Compact */
+.village-section {
+  background: white;
+  padding: 16px;
+  border-radius: 12px;
+  border: 2px solid #e9ecef;
+}
+
+.village-section h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #4d4d4d;
+  margin: 0 0 12px 0;
+}
+
+.rankings-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px; /* Show top 3 initially (3 x 44px + gaps) */
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.rankings-compact::-webkit-scrollbar {
+  width: 4px;
+}
+
+.rankings-compact::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 2px;
+}
+
+.rankings-compact::-webkit-scrollbar-thumb {
+  background: #007fff;
+  border-radius: 2px;
+}
+
+.rankings-compact::-webkit-scrollbar-thumb:hover {
+  background: #0056b3;
+}
+
+.ranking-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  min-height: 44px; /* Fixed height for consistency */
+}
+
+.ranking-row.user-village {
+  background: #f0f8ff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  border: 1px solid #007fff;
+}
+
+.rank {
+  width: 28px;
+  height: 28px;
+  background: #f8f9fa;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  margin-right: 12px;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.ranking-row:first-child .rank {
+  background: #ffd700;
+  color: #333;
+}
+
+.ranking-row:nth-child(2) .rank {
+  background: #c0c0c0;
+  color: #333;
+}
+
+.ranking-row:nth-child(3) .rank {
+  background: #cd7f32;
+  color: white;
+}
+
+.village-name {
+  flex: 1;
+  font-weight: 600;
+  color: #4d4d4d;
+  min-width: 0; /* Allow text to wrap if needed */
+  padding-right: 8px;
+}
+
+.village-points {
+  font-size: 14px;
+  color: #6c757d;
+  font-weight: 500;
+  flex-shrink: 0; /* Keep points aligned */
+  min-width: 60px;
+  text-align: right;
+}
+
+/* Logout Button - High Contrast Visibility */
+.logout-btn {
+  width: 100%;
+  background: #ffffff !important; /* Force white background */
+  color: #4d4d4d !important; /* Force dark gray text */
+  border: 2px solid #fd7e14 !important; /* Red border */
+  padding: 16px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700; /* Bolder text */
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 56px;
+  margin-top: auto;
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2); /* Red shadow for visibility */
+  text-transform: capitalize; /* Make text stand out */
+  letter-spacing: 0.5px;
+}
+
+.logout-btn:active {
+  background: #f8f9fa;
+  border-color: #c82333;
+  transform: scale(0.98);
+  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 480px) {
+  .homepage-header {
+    padding: 16px;
+  }
+  
+  .header-info h1 {
+    font-size: 20px;
+  }
+  
+  .homepage-content {
+    padding: 16px;
+    gap: 16px;
+  }
+  
+  .stats-row {
+    gap: 10px;
+  }
+  
+  .stat-box {
+    padding: 14px;
+  }
+  
+  .day-card {
+    width: 100px;
+    padding: 12px;
+  }
+  
+  .day-card {
+    width: 120px; /* Smaller on mobile */
+  }
+  
+  .day-card.current {
+    width: 140px; /* Proportionally bigger */
+  }
+  
+  .day-circle {
+    width: 60px;
+    height: 60px;
+    font-size: 10px;
+  }
+  
+  .day-card.current .day-circle {
+    width: 70px;
+    height: 70px;
+    font-size: 11px;
+  }
+  
+  .action-button {
+    font-size: 10px;
+    padding: 5px 10px;
+  }
+}
+
+/* Auto-scroll to current day */
+.path-container {
+  scroll-snap-type: x mandatory;
+}
+
+.day-card {
+  scroll-snap-align: center;
+}
+
+/* Touch feedback */
+.day-card:active {
+  transform: scale(0.95);
+}
+
+.day-card.current:active {
+  transform: scale(1.0);
+}
+
+.stat-box:active {
+  transform: scale(0.98);
+}
