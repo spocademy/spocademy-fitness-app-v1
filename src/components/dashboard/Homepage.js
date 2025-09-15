@@ -1,7 +1,7 @@
 // src/components/dashboard/Homepage.js
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { getVillageRankings } from '../../services/firebaseService';
+import { getVillageRankings, canUserTrainToday } from '../../services/firebaseService';
 import DailyPlanPage from '../daily/DailyPlanPage';
 import './Homepage.css';
 
@@ -11,6 +11,7 @@ const Homepage = () => {
   const [selectedDay, setSelectedDay] = useState(null);
   const [villageRankings, setVillageRankings] = useState([]);
   const [loadingRankings, setLoadingRankings] = useState(true);
+  const [canTrainToday, setCanTrainToday] = useState(true);
   const { currentUser, userData, logout } = useAuth();
 
   const text = {
@@ -26,7 +27,9 @@ const Homepage = () => {
       locked: 'Locked',
       profile: 'Profile',
       logout: 'Logout',
-      preparingFor: 'Preparing for'
+      preparingFor: 'Preparing for',
+      alreadyTrainedToday: 'Already Trained Today',
+      comeTomorrowToTrain: 'Come Tomorrow'
     },
     mr: {
       day: 'दिवस',
@@ -40,12 +43,15 @@ const Homepage = () => {
       locked: 'बंद',
       profile: 'प्रोफाइल',
       logout: 'लॉगआउट',
-      preparingFor: 'तयारी करत आहे'
+      preparingFor: 'तयारी करत आहे',
+      alreadyTrainedToday: 'आज आधीच प्रशिक्षण घेतले',
+      comeTomorrowToTrain: 'उद्या येऊन प्रशिक्षण घ्या'
     }
   };
 
   const t = text[language];
 
+  // Load village rankings on component mount
   useEffect(() => {
     const loadRankings = async () => {
       try {
@@ -61,33 +67,63 @@ const Homepage = () => {
     loadRankings();
   }, []);
 
+  // Check if user can train today
+  useEffect(() => {
+    const checkTrainingAccess = async () => {
+      if (!currentUser) return;
+      
+      try {
+        const canTrain = await canUserTrainToday(currentUser.uid);
+        setCanTrainToday(canTrain);
+      } catch (error) {
+        console.error('Error checking training access:', error);
+      }
+    };
+    
+    checkTrainingAccess();
+  }, [currentUser, userData]);
+
+  // Calculate user stats with proper limits
   const userStats = {
     name: userData?.name || 'User',
     currentDay: userData?.currentDay || 1,
-    streak: userData?.streakCount || 0,
-    totalPoints: userData?.points || 0,
+    streak: Math.min(userData?.streakCount || 0, (userData?.currentDay || 1) - 1),
+    totalPoints: Math.min(userData?.points || 0, (userData?.currentDay || 1) - 1),
     village: userData?.village || 'Unknown',
     district: language === 'mr' ? 'पुणे' : 'Pune'
   };
 
+  // Generate path days for display
   const generatePathDays = () => {
     const days = [];
-    for (let i = Math.max(1, userStats.currentDay - 5); i < userStats.currentDay; i++) {
+    const currentDay = userStats.currentDay;
+    
+    // Show previous completed days (up to 5)
+    for (let i = Math.max(1, currentDay - 5); i < currentDay; i++) {
       days.push({ day: i, status: 'completed' });
     }
-    days.push({ day: userStats.currentDay, status: 'current' });
-    for (let i = userStats.currentDay + 1; i <= userStats.currentDay + 5; i++) {
+    
+    // Current day
+    days.push({ 
+      day: currentDay, 
+      status: canTrainToday ? 'current' : 'completed-today'
+    });
+    
+    // Future locked days (up to 5)
+    for (let i = currentDay + 1; i <= currentDay + 5; i++) {
       days.push({ day: i, status: 'locked' });
     }
+    
     return days;
   };
 
   const pathDays = generatePathDays();
 
+  // Auto-scroll to current day
   useEffect(() => {
     if (currentView === 'homepage') {
       const scrollToCurrentDay = () => {
-        const currentDayCard = document.querySelector('.day-card.current');
+        const currentDayCard = document.querySelector('.day-card.current, .day-card.completed-today');
         if (currentDayCard) {
           currentDayCard.scrollIntoView({ 
             behavior: 'smooth', 
@@ -99,7 +135,7 @@ const Homepage = () => {
       const timer = setTimeout(scrollToCurrentDay, 200);
       return () => clearTimeout(timer);
     }
-  }, [currentView, userData]);
+  }, [currentView, userData, canTrainToday]);
 
   const handleDayClick = (day, status) => {
     if (status === 'current') {
@@ -111,6 +147,20 @@ const Homepage = () => {
   const handleBackToHomepage = () => {
     setCurrentView('homepage');
     setSelectedDay(null);
+    
+    // Refresh training access status when returning
+    const refreshAccess = async () => {
+      if (currentUser) {
+        try {
+          const canTrain = await canUserTrainToday(currentUser.uid);
+          setCanTrainToday(canTrain);
+        } catch (error) {
+          console.error('Error refreshing training access:', error);
+        }
+      }
+    };
+    
+    refreshAccess();
   };
 
   const handleLogout = async () => {
@@ -179,6 +229,12 @@ const Homepage = () => {
                 {dayData.status === 'current' && (
                   <div className="action-button">
                     {t.current}
+                  </div>
+                )}
+                
+                {dayData.status === 'completed-today' && (
+                  <div className="status-text completed-today">
+                    {t.alreadyTrainedToday}
                   </div>
                 )}
                 

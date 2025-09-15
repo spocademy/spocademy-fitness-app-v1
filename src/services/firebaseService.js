@@ -9,12 +9,47 @@ import {
   updateDoc, 
   query, 
   where, 
-  orderBy 
+  orderBy,
+  serverTimestamp,
+  Timestamp
 } from 'firebase/firestore';
+
+// India timezone offset (UTC+5:30)
+const INDIA_TIMEZONE_OFFSET = 5.5 * 60 * 60 * 1000;
+
+// Get current India date
+const getIndiaDate = () => {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const indiaTime = new Date(utc + INDIA_TIMEZONE_OFFSET);
+  return indiaTime;
+};
+
+// Get India day name
+const getIndiaDayName = () => {
+  const indiaDate = getIndiaDate();
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  return dayNames[indiaDate.getDay()];
+};
+
+// Check if same calendar day in India timezone
+const isSameIndiaDay = (date1, date2) => {
+  if (!date1 || !date2) return false;
+  
+  const d1 = date1.toDate ? date1.toDate() : new Date(date1);
+  const d2 = date2.toDate ? date2.toDate() : new Date(date2);
+  
+  const utc1 = d1.getTime() + (d1.getTimezoneOffset() * 60000);
+  const utc2 = d2.getTime() + (d2.getTimezoneOffset() * 60000);
+  
+  const india1 = new Date(utc1 + INDIA_TIMEZONE_OFFSET);
+  const india2 = new Date(utc2 + INDIA_TIMEZONE_OFFSET);
+  
+  return india1.toDateString() === india2.toDateString();
+};
 
 // ===== USER FUNCTIONS =====
 
-// Get user data by their ID
 export const getUserData = async (userId) => {
   try {
     const userDoc = await getDoc(doc(db, 'users', userId));
@@ -28,13 +63,15 @@ export const getUserData = async (userId) => {
   }
 };
 
-// Create or update user data
 export const createUser = async (userId, userData) => {
   try {
     await setDoc(doc(db, 'users', userId), {
       ...userData,
-      createdAt: new Date(),
-      lastActive: new Date()
+      createdAt: serverTimestamp(),
+      lastActive: serverTimestamp(),
+      currentDay: 1,
+      points: 0,
+      streakCount: 0
     });
   } catch (error) {
     console.error('Error creating user:', error);
@@ -42,12 +79,11 @@ export const createUser = async (userId, userData) => {
   }
 };
 
-// Update user progress (points, streak, current day)
 export const updateUserProgress = async (userId, progressData) => {
   try {
     await updateDoc(doc(db, 'users', userId), {
       ...progressData,
-      lastActive: new Date()
+      lastActive: serverTimestamp()
     });
   } catch (error) {
     console.error('Error updating progress:', error);
@@ -57,7 +93,6 @@ export const updateUserProgress = async (userId, progressData) => {
 
 // ===== TASK FUNCTIONS =====
 
-// Get all basic tasks
 export const getAllTasks = async () => {
   try {
     const tasksSnapshot = await getDocs(collection(db, 'tasks'));
@@ -68,7 +103,6 @@ export const getAllTasks = async () => {
   }
 };
 
-// Get specific task by ID
 export const getTask = async (taskId) => {
   try {
     const taskDoc = await getDoc(doc(db, 'tasks', taskId));
@@ -82,13 +116,12 @@ export const getTask = async (taskId) => {
   }
 };
 
-// Create new basic task
 export const createTask = async (taskData) => {
   try {
     const taskRef = doc(collection(db, 'tasks'));
     await setDoc(taskRef, {
       ...taskData,
-      createdAt: new Date()
+      createdAt: serverTimestamp()
     });
     return taskRef.id;
   } catch (error) {
@@ -99,7 +132,6 @@ export const createTask = async (taskData) => {
 
 // ===== WEEKLY SCHEDULE FUNCTIONS =====
 
-// Get weekly schedule
 export const getWeeklySchedule = async (scheduleId = 'default_schedule') => {
   try {
     const scheduleDoc = await getDoc(doc(db, 'weeklySchedules', scheduleId));
@@ -113,12 +145,11 @@ export const getWeeklySchedule = async (scheduleId = 'default_schedule') => {
   }
 };
 
-// Create or update weekly schedule
 export const createWeeklySchedule = async (scheduleData, scheduleId = 'default_schedule') => {
   try {
     await setDoc(doc(db, 'weeklySchedules', scheduleId), {
       ...scheduleData,
-      createdAt: new Date()
+      createdAt: serverTimestamp()
     });
   } catch (error) {
     console.error('Error creating weekly schedule:', error);
@@ -128,7 +159,6 @@ export const createWeeklySchedule = async (scheduleData, scheduleId = 'default_s
 
 // ===== CONSOLIDATED PLAN FUNCTIONS =====
 
-// Helper function to create readable plan ID
 const createPlanId = (day, week, level) => {
   const dayMap = {
     monday: 'Mon',
@@ -154,7 +184,6 @@ const createPlanId = (day, week, level) => {
   return `${dayCode}W${week}${levelCode}`;
 };
 
-// Create consolidated daily plan
 export const createDailyPlan = async (day, week, level, tasksData) => {
   try {
     const planId = createPlanId(day, week, level);
@@ -165,7 +194,7 @@ export const createDailyPlan = async (day, week, level, tasksData) => {
       level,
       tasks: tasksData,
       totalPoints: tasksData.length,
-      createdAt: new Date()
+      createdAt: serverTimestamp()
     };
     
     await setDoc(doc(db, 'dailyPlans', planId), planData);
@@ -178,7 +207,6 @@ export const createDailyPlan = async (day, week, level, tasksData) => {
   }
 };
 
-// Get consolidated daily plan
 export const getDailyPlan = async (day, week, level) => {
   try {
     const planId = createPlanId(day, week, level);
@@ -188,7 +216,6 @@ export const getDailyPlan = async (day, week, level) => {
       return { id: planDoc.id, ...planDoc.data() };
     }
     
-    console.log(`No plan found for ${planId}`);
     return null;
   } catch (error) {
     console.error('Error getting daily plan:', error);
@@ -196,7 +223,6 @@ export const getDailyPlan = async (day, week, level) => {
   }
 };
 
-// Get all consolidated plans (for admin)
 export const getAllPlans = async () => {
   try {
     const plansSnapshot = await getDocs(collection(db, 'dailyPlans'));
@@ -207,25 +233,12 @@ export const getAllPlans = async () => {
   }
 };
 
-// ===== DAILY TASK RESOLUTION =====
+// ===== DAILY TASK RESOLUTION WITH FALLBACK =====
 
-// Calculate which week the user is in based on current day
 const calculateWeekNumber = (currentDay) => {
   return Math.ceil(currentDay / 7);
 };
 
-// Get day of week (0 = Monday, 6 = Sunday)
-const getDayOfWeek = (currentDay) => {
-  return (currentDay - 1) % 7;
-};
-
-// Convert day number to day name
-const getDayName = (dayOfWeek) => {
-  const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-  return dayNames[dayOfWeek];
-};
-
-// Helper function to get task icon
 const getTaskIcon = (taskType) => {
   switch (taskType) {
     case 'strength':
@@ -239,42 +252,50 @@ const getTaskIcon = (taskType) => {
   }
 };
 
-// Get daily tasks for user with execution details (NEW CONSOLIDATED VERSION)
+// Get daily tasks with fallback hierarchy
 export const getDailyTasksForUser = async (level, currentDay) => {
   try {
     const weekNumber = calculateWeekNumber(currentDay);
+    const currentDayName = getIndiaDayName(); // Always use current calendar day
     
-    // Get actual calendar day (0=Sunday, 1=Monday, etc.)
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const dayName = dayNames[dayOfWeek];
+    console.log(`Getting tasks for ${currentDayName}, week ${weekNumber}, level ${level}`);
     
-    console.log(`Getting tasks for ${dayName}, week ${weekNumber}, level ${level}`);
+    // Try current week first
+    let dailyPlan = await getDailyPlan(currentDayName, weekNumber, level);
     
-    // Get consolidated daily plan
-    const dailyPlan = await getDailyPlan(dayName, weekNumber, level);
-    
-    if (!dailyPlan || !dailyPlan.tasks) {
-      console.log(`No consolidated plan found for ${dayName} week ${weekNumber} level ${level}`);
-      return [];
+    // Fallback hierarchy if current week not found
+    if (!dailyPlan) {
+      console.log(`No plan for week ${weekNumber}, trying previous weeks...`);
+      
+      // Try previous weeks
+      for (let fallbackWeek = weekNumber - 1; fallbackWeek >= 1; fallbackWeek--) {
+        dailyPlan = await getDailyPlan(currentDayName, fallbackWeek, level);
+        if (dailyPlan) {
+          console.log(`Found fallback plan in week ${fallbackWeek}`);
+          break;
+        }
+      }
     }
     
-    console.log('Found consolidated plan:', dailyPlan);
+    // If still no plan found, return empty with flag for WhatsApp support
+    if (!dailyPlan || !dailyPlan.tasks) {
+      console.log(`No plans found for ${currentDayName} ${level}`);
+      return { tasks: [], showWhatsAppSupport: true };
+    }
     
-    // Get full task details for each task in the plan
+    console.log('Found plan:', dailyPlan);
+    
+    // Get full task details
     const dailyTasks = [];
     
     for (const taskPlan of dailyPlan.tasks) {
       try {
-        // Get basic task info
         const task = await getTask(taskPlan.taskId);
         if (!task) {
           console.log(`Task ${taskPlan.taskId} not found`);
           continue;
         }
         
-        // Combine task and plan data
         const dailyTask = {
           id: task.id,
           name: task.name,
@@ -292,8 +313,7 @@ export const getDailyTasksForUser = async (level, currentDay) => {
       }
     }
     
-    console.log('Final daily tasks:', dailyTasks);
-    return dailyTasks;
+    return { tasks: dailyTasks, showWhatsAppSupport: false };
     
   } catch (error) {
     console.error('Error getting daily tasks for user:', error);
@@ -301,23 +321,190 @@ export const getDailyTasksForUser = async (level, currentDay) => {
   }
 };
 
-// ===== LEGACY COMPATIBILITY FUNCTIONS =====
+// ===== DAILY COMPLETION TRACKING =====
 
-// Legacy function - now redirects to consolidated system
-export const createTaskPlan = async (taskId, level, week, planData) => {
-  console.warn('createTaskPlan is deprecated. Use createDailyPlan instead.');
-  return null;
+// Get today's completion tracking document
+export const getTodayCompletion = async (userId) => {
+  try {
+    const indiaDate = getIndiaDate();
+    const dateStr = indiaDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    const completionId = `${userId}_${dateStr}`;
+    
+    const completionDoc = await getDoc(doc(db, 'dailyCompletions', completionId));
+    if (completionDoc.exists()) {
+      return { id: completionDoc.id, ...completionDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting today completion:', error);
+    throw error;
+  }
 };
 
-// Legacy function - now redirects to consolidated system  
-export const getPlan = async (taskId, level, week) => {
-  console.warn('getPlan is deprecated. Use getDailyPlan instead.');
-  return null;
+// Save task completion for today
+export const saveTaskCompletion = async (userId, taskId, currentDay) => {
+  try {
+    const indiaDate = getIndiaDate();
+    const dateStr = indiaDate.toISOString().split('T')[0];
+    const completionId = `${userId}_${dateStr}`;
+    
+    // Get existing completion or create new
+    let completionData = await getTodayCompletion(userId);
+    
+    if (!completionData) {
+      completionData = {
+        userId,
+        date: dateStr,
+        currentDay,
+        completedTasks: {},
+        allTasksCompleted: false,
+        createdAt: serverTimestamp()
+      };
+    }
+    
+    // Mark task as completed
+    completionData.completedTasks[taskId] = {
+      completed: true,
+      completedAt: serverTimestamp()
+    };
+    
+    // Save updated completion
+    await setDoc(doc(db, 'dailyCompletions', completionId), {
+      ...completionData,
+      updatedAt: serverTimestamp()
+    });
+    
+    return completionData;
+  } catch (error) {
+    console.error('Error saving task completion:', error);
+    throw error;
+  }
 };
 
-// ===== PROGRESS TRACKING (UNCHANGED) =====
+// Check if all tasks completed for today and update user progress
+export const checkAndUpdateDayCompletion = async (userId, currentDay, totalTasks) => {
+  try {
+    const todayCompletion = await getTodayCompletion(userId);
+    
+    if (!todayCompletion) return false;
+    
+    const completedTaskCount = Object.keys(todayCompletion.completedTasks).length;
+    const allCompleted = completedTaskCount >= totalTasks;
+    
+    if (allCompleted && !todayCompletion.allTasksCompleted) {
+      // Mark day as fully completed
+      const indiaDate = getIndiaDate();
+      const dateStr = indiaDate.toISOString().split('T')[0];
+      const completionId = `${userId}_${dateStr}`;
+      
+      await updateDoc(doc(db, 'dailyCompletions', completionId), {
+        allTasksCompleted: true,
+        dayCompletedAt: serverTimestamp()
+      });
+      
+      // Update user progress
+      await updateUserDayCompletion(userId, currentDay);
+      
+      return true;
+    }
+    
+    return allCompleted;
+  } catch (error) {
+    console.error('Error checking day completion:', error);
+    throw error;
+  }
+};
 
-// Save user's daily progress
+// Update user's day completion, points, and streak
+const updateUserDayCompletion = async (userId, completedDay) => {
+  try {
+    const userData = await getUserData(userId);
+    if (!userData) return;
+    
+    // Calculate new streak
+    let newStreak = 1;
+    
+    // Check if this completion continues a streak
+    if (userData.lastCompletedDay && userData.lastCompletedDay === completedDay - 1) {
+      newStreak = (userData.streakCount || 0) + 1;
+    }
+    
+    // Update user data
+    await updateUserProgress(userId, {
+      currentDay: completedDay + 1,
+      points: (userData.points || 0) + 1,
+      streakCount: newStreak,
+      lastCompletedDay: completedDay,
+      lastCompletedAt: serverTimestamp()
+    });
+    
+    console.log(`User ${userId} completed day ${completedDay}. New streak: ${newStreak}`);
+  } catch (error) {
+    console.error('Error updating user day completion:', error);
+    throw error;
+  }
+};
+
+// Check if user can access training today (prevent multiple day completion)
+export const canUserTrainToday = async (userId) => {
+  try {
+    const userData = await getUserData(userId);
+    if (!userData) return false;
+    
+    // Check if user already completed a day today
+    const todayCompletion = await getTodayCompletion(userId);
+    
+    if (todayCompletion && todayCompletion.allTasksCompleted) {
+      return false; // Already completed a day today
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error checking if user can train today:', error);
+    return false;
+  }
+};
+
+// Reset incomplete days (to be called by Cloud Function at midnight)
+export const resetIncompleteDays = async () => {
+  try {
+    // Get yesterday's incomplete completions
+    const yesterday = new Date(getIndiaDate().getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    
+    const completionsSnapshot = await getDocs(
+      query(
+        collection(db, 'dailyCompletions'),
+        where('date', '==', yesterdayStr),
+        where('allTasksCompleted', '==', false)
+      )
+    );
+    
+    // Reset streaks for users with incomplete days
+    for (const completionDoc of completionsSnapshot.docs) {
+      const completionData = completionDoc.data();
+      const userId = completionData.userId;
+      
+      const userData = await getUserData(userId);
+      if (userData) {
+        await updateUserProgress(userId, {
+          streakCount: 0,
+          lastIncompleteDate: yesterdayStr
+        });
+        
+        console.log(`Reset streak for user ${userId} due to incomplete day ${yesterdayStr}`);
+      }
+    }
+    
+    console.log(`Processed ${completionsSnapshot.docs.length} incomplete days for ${yesterdayStr}`);
+  } catch (error) {
+    console.error('Error resetting incomplete days:', error);
+    throw error;
+  }
+};
+
+// ===== PROGRESS TRACKING =====
+
 export const saveUserProgress = async (userId, day, progressData) => {
   try {
     const progressId = `${userId}_day${day}`;
@@ -325,7 +512,7 @@ export const saveUserProgress = async (userId, day, progressData) => {
       userId,
       day,
       ...progressData,
-      completedAt: new Date()
+      completedAt: serverTimestamp()
     });
   } catch (error) {
     console.error('Error saving progress:', error);
@@ -333,7 +520,6 @@ export const saveUserProgress = async (userId, day, progressData) => {
   }
 };
 
-// Get user's progress for specific day
 export const getUserProgress = async (userId, day) => {
   try {
     const progressId = `${userId}_day${day}`;
@@ -349,16 +535,13 @@ export const getUserProgress = async (userId, day) => {
   }
 };
 
-// ===== VILLAGE RANKINGS (UNCHANGED) =====
+// ===== VILLAGE RANKINGS =====
 
-// Get village rankings (top villages by total points)
 export const getVillageRankings = async () => {
   try {
-    // Get all users
     const usersSnapshot = await getDocs(collection(db, 'users'));
     const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-    // Group users by village and calculate total points
     const villagePoints = {};
     
     users.forEach(user => {
@@ -370,7 +553,6 @@ export const getVillageRankings = async () => {
       }
     });
     
-    // Convert to array and sort by points
     const rankings = Object.entries(villagePoints)
       .map(([village, points]) => ({ village, points }))
       .sort((a, b) => b.points - a.points)
@@ -383,9 +565,8 @@ export const getVillageRankings = async () => {
   }
 };
 
-// ===== ADMIN FUNCTIONS (UNCHANGED) =====
+// ===== ADMIN FUNCTIONS =====
 
-// Get all users (for admin dashboard)
 export const getAllUsers = async () => {
   try {
     const usersSnapshot = await getDocs(
@@ -398,7 +579,6 @@ export const getAllUsers = async () => {
   }
 };
 
-// Get user statistics (for admin dashboard)
 export const getUserStats = async () => {
   try {
     const users = await getAllUsers();

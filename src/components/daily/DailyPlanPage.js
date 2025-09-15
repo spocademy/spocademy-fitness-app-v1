@@ -1,11 +1,17 @@
 // src/components/daily/DailyPlanPage.js
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { saveUserProgress, updateUserProgress, getDailyTasksForUser, getUserProgress } from '../../services/firebaseService';
+import { 
+  getDailyTasksForUser, 
+  getTodayCompletion,
+  saveTaskCompletion,
+  checkAndUpdateDayCompletion,
+  canUserTrainToday
+} from '../../services/firebaseService';
 import './DailyPlanPage.css';
 import EnhancedCamera from './EnhancedCamera';
 
-const DailyPlanPage = ({ day = 15, onBack }) => {
+const DailyPlanPage = ({ day, onBack }) => {
   const [currentLanguage, setCurrentLanguage] = useState('mr');
   const [completedTasks, setCompletedTasks] = useState(new Set());
   const [currentExercise, setCurrentExercise] = useState(null);
@@ -13,79 +19,70 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
   const [audioContext, setAudioContext] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(true);
+  const [showWhatsAppSupport, setShowWhatsAppSupport] = useState(false);
+  const [canTrainToday, setCanTrainToday] = useState(true);
+  const [alreadyCompletedToday, setAlreadyCompletedToday] = useState(false);
   const { currentUser, userData, refreshUserData } = useAuth();
 
-  // Check if current calendar day matches required day for this training day
-  const isCorrectCalendarDay = () => {
-    const today = new Date();
-    const currentCalendarDay = today.getDay(); // 0=Sunday, 1=Monday, etc.
-    const requiredCalendarDay = (day - 1) % 7; // Training day to calendar day
-    
-    return currentCalendarDay === requiredCalendarDay;
-  };
-
-  const getRequiredDayName = () => {
-    const requiredCalendarDay = (day - 1) % 7;
-    const dayNames = currentLanguage === 'en' 
-      ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-      : ['रविवार', 'सोमवार', 'मंगळवार', 'बुधवार', 'गुरुवार', 'शुक्रवार', 'शनिवार'];
-    return dayNames[requiredCalendarDay];
-  };
-
-  const getCurrentDay = () => {
-    return Math.max(day, 1);
-  };
-
-  const isDayAccessible = (dayNumber) => {
-    return dayNumber <= getCurrentDay();
-  };
-
-  // Check for streak reset based on calendar day gaps and validate maximum streak
-  const checkAndResetStreak = async () => {
-    if (!currentUser || !userData) return;
-
-    const today = new Date();
-    const lastActive = userData.lastActive ? new Date(userData.lastActive.seconds * 1000) : null;
-    
-    let shouldUpdate = false;
-    let newStreakCount = userData.streakCount || 0;
-    
-    // Rule 1: Streak cannot exceed currentDay
-    const maxPossibleStreak = userData.currentDay;
-    if (newStreakCount > maxPossibleStreak) {
-      console.log(`Streak ${newStreakCount} exceeds max possible ${maxPossibleStreak}. Capping streak.`);
-      newStreakCount = maxPossibleStreak;
-      shouldUpdate = true;
-    }
-    
-    // Rule 2: Check for calendar day gaps
-    if (lastActive) {
-      const daysDiff = Math.floor((today - lastActive) / (1000 * 60 * 60 * 24));
+  // Check if user can train today
+  useEffect(() => {
+    const checkTrainingAccess = async () => {
+      if (!currentUser) return;
       
-      if (daysDiff > 1 && newStreakCount > 0) {
-        console.log(`Gap detected: ${daysDiff} days. Resetting streak.`);
-        newStreakCount = 0;
-        shouldUpdate = true;
-      }
-    }
-    
-    // Update if needed
-    if (shouldUpdate) {
       try {
-        await updateUserProgress(currentUser.uid, {
-          streakCount: newStreakCount,
-          lastActive: new Date()
-        });
+        const canTrain = await canUserTrainToday(currentUser.uid);
+        setCanTrainToday(canTrain);
         
-        if (refreshUserData) {
-          refreshUserData();
+        if (!canTrain) {
+          setAlreadyCompletedToday(true);
         }
       } catch (error) {
-        console.error('Error updating streak:', error);
+        console.error('Error checking training access:', error);
       }
-    }
-  };
+    };
+    
+    checkTrainingAccess();
+  }, [currentUser]);
 
+  // Load tasks and existing completion state
+  useEffect(() => {
+    const loadDailyTasks = async () => {
+      if (!userData?.level) return;
+      
+      try {
+        setLoadingTasks(true);
+        
+        const tasksResponse = await getDailyTasksForUser(userData.level, userData.currentDay || 1);
+        
+        if (tasksResponse.showWhatsAppSupport) {
+          setShowWhatsAppSupport(true);
+          setTasks([]);
+        } else {
+          setTasks(tasksResponse.tasks || []);
+          setShowWhatsAppSupport(false);
+          
+          // Load today's completion state
+          if (currentUser) {
+            const todayCompletion = await getTodayCompletion(currentUser.uid);
+            if (todayCompletion && todayCompletion.completedTasks) {
+              const completedTaskIds = Object.keys(todayCompletion.completedTasks);
+              setCompletedTasks(new Set(completedTaskIds));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading daily tasks:', error);
+        setTasks([]);
+        setShowWhatsAppSupport(true);
+      } finally {
+        setLoadingTasks(false);
+      }
+    };
+
+    loadDailyTasks();
+  }, [userData?.level, userData?.currentDay, currentUser]);
+
+  // Initialize audio context
   useEffect(() => {
     const initAudio = () => {
       try {
@@ -111,122 +108,31 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
     };
   }, []);
 
-  // Check for streak reset on component mount
+  // Check for day completion
   useEffect(() => {
-    const runStreakCheck = async () => {
-      await checkAndResetStreak();
-    };
-    
-    if (userData && currentUser) {
-      runStreakCheck();
-    }
-  }, [currentUser, userData]);
-
-  // Load tasks using new consolidated system
-  useEffect(() => {
-    const loadDailyTasks = async () => {
-      if (!userData?.level) return;
-      
-      try {
-        setLoadingTasks(true);
-        
-        const tasksData = await getDailyTasksForUser(userData.level, day);
-        
-        if (tasksData && tasksData.length > 0) {
-          const formattedTasks = tasksData.map(task => ({
-            id: task.id,
-            category: task.type,
-            type: task.type === 'athletics' || task.type === 'nutrition' ? 'self-mark' : 'camera',
-            icon: task.icon,
-            reps: task.reps,
-            sets: task.sets,
-            restTime: task.restTime,
-            name: task.name,
-            exerciseType: task.exerciseType
-          }));
+    const checkCompletion = async () => {
+      if (completedTasks.size === tasks.length && completedTasks.size > 0 && currentUser) {
+        try {
+          const dayCompleted = await checkAndUpdateDayCompletion(
+            currentUser.uid, 
+            userData.currentDay || 1, 
+            tasks.length
+          );
           
-          setTasks(formattedTasks);
-        } else {
-          setTasks([]);
+          if (dayCompleted) {
+            setTimeout(() => {
+              setShowCelebration(true);
+              playCelebrationSound();
+            }, 1000);
+          }
+        } catch (error) {
+          console.error('Error checking day completion:', error);
         }
-      } catch (error) {
-        console.error('Error loading daily tasks:', error);
-        setTasks([]);
-      } finally {
-        setLoadingTasks(false);
       }
     };
-
-    loadDailyTasks();
-  }, [userData?.level, day]);
-
-  useEffect(() => {
-    if (completedTasks.size === tasks.length && completedTasks.size > 0) {
-      setTimeout(() => {
-        setShowCelebration(true);
-        playCelebrationSound();
-        handleDayCompletion();
-      }, 1000);
-    }
-  }, [completedTasks.size, tasks.length]);
-
-  const handleDayCompletion = async () => {
-    if (!currentUser || !userData) return;
-
-    try {
-      const pointsEarned = 1;
-      
-      // Save the progress for this day
-      await saveUserProgress(currentUser.uid, day, {
-        completed: true,
-        tasks: Object.fromEntries(Array.from(completedTasks).map(taskId => [taskId, { completed: true }])),
-        pointsEarned,
-        completedAt: new Date()
-      });
-
-      // Calculate proper streak: count consecutive completed days from day 1
-      const calculateConsecutiveStreak = async () => {
-        let streak = 0;
-        for (let d = 1; d <= day; d++) {
-          const progress = await getUserProgress(currentUser.uid, d);
-          if (progress && progress.completed) {
-            streak++;
-          } else {
-            // If any day is not completed, reset streak to 0
-            streak = 0;
-            break;
-          }
-        }
-        return streak;
-      };
-
-      // Calculate total points: count all completed days (not consecutive)
-      const calculateTotalPoints = async () => {
-        let totalCompletedDays = 0;
-        for (let d = 1; d <= day; d++) {
-          const progress = await getUserProgress(currentUser.uid, d);
-          if (progress && progress.completed) {
-            totalCompletedDays++;
-          }
-        }
-        return totalCompletedDays;
-      };
-
-      const newStreak = await calculateConsecutiveStreak();
-      const newTotalPoints = await calculateTotalPoints();
-
-      await updateUserProgress(currentUser.uid, {
-        currentDay: Math.max(userData.currentDay, day + 1),
-        points: newTotalPoints,
-        streakCount: newStreak,
-        lastActive: new Date()
-      });
-
-      console.log(`Progress saved successfully - Total points: ${newTotalPoints}, Streak: ${newStreak}`);
-    } catch (error) {
-      console.error('Error saving progress:', error);
-    }
-  };
+    
+    checkCompletion();
+  }, [completedTasks.size, tasks.length, currentUser, userData?.currentDay]);
 
   const playSound = (type = 'click') => {
     if (!audioContext) return;
@@ -296,9 +202,9 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
   const translations = {
     en: {
       userName: `Hello, ${userData?.name || 'User'}`,
-      trainingDay: "Day " + day,
+      trainingDay: `Day ${userData?.currentDay || 1}`,
       athletics: "ATHLETICS",
-      strength: "STRENGTH",
+      strength: "STRENGTH", 
       nutrition: "NUTRITION",
       markComplete: "Mark Complete",
       startCamera: "Start Camera",
@@ -310,17 +216,17 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
       allTasksCompleted: "All tasks completed for today!",
       greatWork: "Great Work!",
       tomorrowUnlocked: "Tomorrow's training is now unlocked!",
-      dayLocked: "This day is not yet available",
-      comeBackTomorrow: "Come back on the scheduled date to unlock",
-      wrongDay: "Today is not the scheduled day for this training",
-      comeBackOn: "Come back on",
-      noTasksFound: "No tasks assigned for this day yet",
+      noTasksFound: "No tasks planned for today",
+      contactAdmin: "Contact admin to add tasks for your level and today's schedule",
       loadingTasks: "Loading your training plan...",
-      dayComplete: "Day completed! You earned 1 point!"
+      dayComplete: "Day completed! You earned 1 point!",
+      alreadyCompleted: "You have already completed training today",
+      comeBackTomorrow: "Come back tomorrow for your next training session",
+      whatsappSupport: "Contact Support"
     },
     mr: {
       userName: `नमस्कार, ${userData?.name || 'वापरकर्ता'}`,
-      trainingDay: "दिवस " + day,
+      trainingDay: `दिवस ${userData?.currentDay || 1}`,
       athletics: "खेळ",
       strength: "शक्ती",
       nutrition: "पोषण",
@@ -333,13 +239,13 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
       allTasksCompleted: "आजची सर्व कामे पूर्ण झाली!",
       greatWork: "छान काम!",
       tomorrowUnlocked: "उद्याचे प्रशिक्षण आता उघडले आहे!",
-      dayLocked: "हा दिवस अजून उपलब्ध नाही",
-      comeBackTomorrow: "निर्धारित तारखेला परत या आणि अनलॉक करा",
-      wrongDay: "आज या प्रशिक्षणाचा निर्धारित दिवस नाही",
-      comeBackOn: "परत या",
-      noTasksFound: "या दिवसासाठी अजून कामे नियुक्त केलेली नाहीत",
+      noTasksFound: "आजसाठी कोणती कामे नियोजित नाहीत",
+      contactAdmin: "तुमच्या स्तरासाठी आणि आजच्या वेळापत्रकासाठी कामे जोडण्यासाठी प्रशासकाशी संपर्क साधा",
       loadingTasks: "तुमची प्रशिक्षण योजना लोड करत आहे...",
-      dayComplete: "दिवस पूर्ण झाला! तुम्हाला 1 गुण मिळाला!"
+      dayComplete: "दिवस पूर्ण झाला! तुम्हाला 1 गुण मिळाला!",
+      alreadyCompleted: "तुम्ही आज आधीच प्रशिक्षण पूर्ण केले आहे",
+      comeBackTomorrow: "तुमच्या पुढील प्रशिक्षण सत्रासाठी उद्या परत या",
+      whatsappSupport: "सहाय्यता संपर्क"
     }
   };
 
@@ -364,14 +270,21 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
     setCurrentLanguage(currentLanguage === 'en' ? 'mr' : 'en');
   };
 
-  const handleTaskAction = (taskId) => {
+  const handleTaskAction = async (taskId) => {
+    if (!canTrainToday || alreadyCompletedToday) return;
+    
     playSound('click');
     triggerHapticFeedback('light');
     
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
     
-    if (task.type === 'camera') {
+    // Check if this is a strength exercise with camera detection
+    const hasCamera = task.type === 'strength' && 
+                     task.exerciseType && 
+                     (task.exerciseType === 'squats' || task.exerciseType === 'jumpingJacks');
+    
+    if (hasCamera) {
       const exerciseObject = {
         ...task,
         repsPerSet: task.reps,
@@ -381,20 +294,30 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
       };
       setCurrentExercise(exerciseObject);
     } else {
-      completeTask(taskId);
+      await completeTask(taskId);
     }
   };
 
-  const completeTask = (taskId) => {
-    if (completedTasks.has(taskId)) return;
+  const completeTask = async (taskId) => {
+    if (completedTasks.has(taskId) || !currentUser) return;
     
-    playSound('success');
-    triggerHapticFeedback('medium');
-    
-    setCompletedTasks(new Set([...completedTasks, taskId]));
+    try {
+      playSound('success');
+      triggerHapticFeedback('medium');
+      
+      // Save task completion to database
+      await saveTaskCompletion(currentUser.uid, taskId, userData.currentDay || 1);
+      
+      // Update local state
+      setCompletedTasks(new Set([...completedTasks, taskId]));
+    } catch (error) {
+      console.error('Error completing task:', error);
+    }
   };
 
   const uncheckTask = (taskId) => {
+    if (alreadyCompletedToday) return;
+    
     playSound('click');
     triggerHapticFeedback('light');
     
@@ -403,9 +326,9 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
     setCompletedTasks(newCompletedTasks);
   };
 
-  const completeCurrentExercise = () => {
+  const completeCurrentExercise = async () => {
     if (currentExercise) {
-      completeTask(currentExercise.id);
+      await completeTask(currentExercise.id);
       setCurrentExercise(null);
     }
   };
@@ -414,7 +337,7 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
     setShowCelebration(false);
     
     if (refreshUserData) {
-      refreshUserData();
+      await refreshUserData();
     }
     
     if (onBack) {
@@ -429,12 +352,26 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
     if (task && 'speechSynthesis' in window) {
       const t = translations[currentLanguage];
       const taskName = task.name?.[currentLanguage] || task.name?.en || 'Unknown Task';
-      const text = `${t.instructions} ${taskName}`;
+      
+      // Build detailed description
+      let description = taskName;
+      
+      if (task.reps && task.sets) {
+        const setsText = currentLanguage === 'mr' ? 'सेट' : 'sets';
+        const repsText = currentLanguage === 'mr' ? 'रेप्स' : 'reps';
+        const restText = currentLanguage === 'mr' ? 'सेकंद विश्रांती' : 'seconds rest';
+        
+        description += `. ${task.sets} ${setsText}, ${task.reps} ${repsText}`;
+        
+        if (task.restTime) {
+          description += `, ${task.restTime} ${restText}`;
+        }
+      }
       
       speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
+      const utterance = new SpeechSynthesisUtterance(description);
       utterance.lang = currentLanguage === 'mr' ? 'hi-IN' : 'en-US';
-      utterance.rate = 0.9;
+      utterance.rate = 0.8; // Slightly slower for detailed info
       speechSynthesis.speak(utterance);
     }
   };
@@ -457,17 +394,32 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
     if (onBack) onBack();
   };
 
+  const handleWhatsAppSupport = () => {
+    const message = currentLanguage === 'en' 
+      ? `Hi, I need tasks assigned for ${userData?.level || 'my level'} for today's training. My current day is ${userData?.currentDay || 1}.`
+      : `नमस्कार, मला आजच्या प्रशिक्षणासाठी ${userData?.level || 'माझ्या स्तरासाठी'} कामे नियुक्त करण्याची गरज आहे. माझा सध्याचा दिवस ${userData?.currentDay || 1} आहे.`;
+    
+    const whatsappUrl = `https://wa.me/919359246193?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   const renderTaskCard = (task) => {
     const isCompleted = completedTasks.has(task.id);
     const t = translations[currentLanguage];
-    const buttonText = task.type === 'camera' ? t.startCamera : t.markComplete;
+    
+    // Determine if this task should use camera
+    const hasCamera = task.type === 'strength' && 
+                     task.exerciseType && 
+                     (task.exerciseType === 'squats' || task.exerciseType === 'jumpingJacks');
+    
+    const buttonText = hasCamera ? t.startCamera : t.markComplete;
     
     const taskName = task.name?.[currentLanguage] || task.name?.en || 'Unknown Task';
     const taskDesc = task.reps ? `${task.sets} sets of ${task.reps} reps` : 'Complete this task';
     
     return (
       <div key={task.id} className={`task-card ${isCompleted ? 'completed' : ''}`}>
-        {isCompleted && (
+        {isCompleted && !alreadyCompletedToday && (
           <button className="undo-btn" onClick={() => uncheckTask(task.id)}>
             {t.undo}
           </button>
@@ -486,7 +438,11 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
           {isCompleted ? (
             <div className="completed-indicator">{t.completed}</div>
           ) : (
-            <button className="start-btn" onClick={() => handleTaskAction(task.id)}>
+            <button 
+              className="start-btn" 
+              onClick={() => handleTaskAction(task.id)}
+              disabled={!canTrainToday || alreadyCompletedToday}
+            >
               {buttonText}
             </button>
           )}
@@ -497,7 +453,6 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
 
   const t = translations[currentLanguage];
   const categories = ['athletics', 'strength', 'nutrition'];
-  const isCurrentDayAccessible = isDayAccessible(day);
 
   return (
     <div className="daily-plan-container">
@@ -524,32 +479,44 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
       </div>
 
       <div className="task-list">
-        {!isCurrentDayAccessible ? (
+        {alreadyCompletedToday ? (
           <div className="day-locked-message">
-            <div className="lock-icon">🔒</div>
-            <div className="lock-title">{t.dayLocked}</div>
+            <div className="lock-icon">✅</div>
+            <div className="lock-title">{t.alreadyCompleted}</div>
             <div className="lock-message">{t.comeBackTomorrow}</div>
-          </div>
-        ) : !isCorrectCalendarDay() ? (
-          <div className="day-locked-message">
-            <div className="lock-icon">📅</div>
-            <div className="lock-title">{t.wrongDay}</div>
-            <div className="lock-message">{t.comeBackOn} {getRequiredDayName()}</div>
           </div>
         ) : loadingTasks ? (
           <div className="day-locked-message">
             <div className="lock-icon">⏳</div>
             <div className="lock-title">{t.loadingTasks}</div>
           </div>
-        ) : tasks.length === 0 ? (
+        ) : showWhatsAppSupport ? (
           <div className="day-locked-message">
             <div className="lock-icon">📋</div>
             <div className="lock-title">{t.noTasksFound}</div>
-            <div className="lock-message">Contact admin to assign tasks</div>
+            <div className="lock-message">{t.contactAdmin}</div>
+            <button 
+              className="whatsapp-support-btn"
+              onClick={handleWhatsAppSupport}
+              style={{
+                background: '#25d366',
+                color: 'white',
+                border: 'none',
+                padding: '15px 25px',
+                borderRadius: '25px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                marginTop: '20px',
+                transition: 'all 0.2s'
+              }}
+            >
+              📞 {t.whatsappSupport}
+            </button>
           </div>
         ) : (
           categories.map(category => {
-            const categoryTasks = tasks.filter(task => task.category === category);
+            const categoryTasks = tasks.filter(task => task.type === category);
             if (categoryTasks.length === 0) return null;
             
             return (
@@ -570,6 +537,7 @@ const DailyPlanPage = ({ day = 15, onBack }) => {
           isVisible={!!currentExercise}
           translations={t}
           currentLanguage={currentLanguage}
+          autoStart={true}
         />
       )}
 

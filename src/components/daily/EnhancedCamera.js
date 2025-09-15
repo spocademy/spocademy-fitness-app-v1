@@ -90,18 +90,69 @@ const EnhancedCamera = ({
       setIsResting(false);
       setShowOverlay(false);
       
-      const checkAndStart = () => {
-        if (typeof window.Pose !== 'undefined' && typeof window.Camera !== 'undefined') {
-          console.log('MediaPipe available, starting camera...');
-          startCamera();
-        } else {
-          console.log('MediaPipe not ready, retrying...');
-          setExerciseStatus('Loading MediaPipe...');
-          setTimeout(checkAndStart, 1000);
+      let retryCount = 0;
+      const maxRetries = 20;
+      
+      const testMediaPipeInitialization = async () => {
+        try {
+          console.log('Testing MediaPipe initialization...');
+          
+          // Try to create a Pose instance to test if MediaPipe is truly ready
+          const testPose = new window.Pose({
+            locateFile: (file) => {
+              return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`;
+            }
+          });
+          
+          // Set basic options to test if it works
+          testPose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+          });
+          
+          // If we reach here without error, MediaPipe is ready
+          testPose.close(); // Clean up test instance
+          console.log('MediaPipe initialization test passed');
+          return true;
+        } catch (error) {
+          console.log('MediaPipe initialization test failed:', error.message);
+          return false;
         }
       };
       
-      checkAndStart();
+      const checkAndStart = async () => {
+        if (retryCount >= maxRetries) {
+          setExerciseStatus('Camera detection failed to load. Please check your internet connection and refresh the page.');
+          return;
+        }
+        
+        // Check basic objects first
+        if (typeof window.Pose === 'undefined' || typeof window.Camera === 'undefined') {
+          console.log(`MediaPipe scripts not loaded, retrying... (${retryCount + 1}/${maxRetries})`);
+          setExerciseStatus(`Loading camera system... (${retryCount + 1}/${maxRetries})`);
+          retryCount++;
+          setTimeout(checkAndStart, 2000); // Longer delay for slow networks
+          return;
+        }
+        
+        // Test actual initialization
+        const isReady = await testMediaPipeInitialization();
+        if (isReady) {
+          console.log('MediaPipe ready, starting camera...');
+          startCamera();
+        } else {
+          console.log(`MediaPipe not ready, retrying... (${retryCount + 1}/${maxRetries})`);
+          setExerciseStatus(`Initializing camera system... (${retryCount + 1}/${maxRetries})`);
+          retryCount++;
+          setTimeout(checkAndStart, 2000);
+        }
+      };
+      
+      // Wait longer initially for slow networks
+      setTimeout(checkAndStart, 1000);
     }
     
     return () => {
@@ -113,7 +164,7 @@ const EnhancedCamera = ({
     try {
       setExerciseStatus('Starting camera...');
       
-      // Initialize Pose
+      // Initialize Pose with explicit error handling
       const pose = new window.Pose({
         locateFile: (file) => {
           return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`;
@@ -149,7 +200,7 @@ const EnhancedCamera = ({
       
       // Wait for video to load
       await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Video load timeout')), 10000);
+        const timeout = setTimeout(() => reject(new Error('Video load timeout')), 15000);
         
         const handleLoaded = () => {
           clearTimeout(timeout);

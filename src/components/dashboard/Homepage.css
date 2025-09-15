@@ -260,6 +260,12 @@
   color: #6c757d;
 }
 
+.status-text.completed-today {
+  background: #fee;
+  color: #d63384;
+  border: 1px solid #f5c2c7;
+}
+
 /* Village Section - Compact */
 .village-section {
   background: white;

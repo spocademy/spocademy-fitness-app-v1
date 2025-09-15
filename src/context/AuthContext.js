@@ -21,7 +21,7 @@ export const AuthProvider = ({ children }) => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Set persistence to keep users logged in for ~30 days
+  // Set persistence to keep users logged in
   useEffect(() => {
     const initializeAuth = async () => {
       try {
@@ -67,13 +67,31 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Refresh user data from database
+  // Refresh user data from database with data validation
   const refreshUserData = async () => {
     if (currentUser) {
       try {
         const freshUserData = await getUserData(currentUser.uid);
-        setUserData(freshUserData);
-        console.log('User data refreshed');
+        
+        if (freshUserData) {
+          // Validate and fix data integrity
+          const currentDay = freshUserData.currentDay || 1;
+          const maxPossibleStreak = Math.max(0, currentDay - 1);
+          const maxPossiblePoints = Math.max(0, currentDay - 1);
+          
+          // Fix any corrupted data
+          const validatedData = {
+            ...freshUserData,
+            currentDay: Math.max(1, currentDay),
+            streakCount: Math.min(freshUserData.streakCount || 0, maxPossibleStreak),
+            points: Math.min(freshUserData.points || 0, maxPossiblePoints)
+          };
+          
+          setUserData(validatedData);
+          console.log('User data refreshed and validated');
+        } else {
+          setUserData(null);
+        }
       } catch (error) {
         console.error('Error refreshing user data:', error);
       }
@@ -88,7 +106,24 @@ export const AuthProvider = ({ children }) => {
         try {
           // Fetch user data when auth state changes
           const userDataFromDb = await getUserData(user.uid);
-          setUserData(userDataFromDb);
+          
+          if (userDataFromDb) {
+            // Validate data on load
+            const currentDay = userDataFromDb.currentDay || 1;
+            const maxPossibleStreak = Math.max(0, currentDay - 1);
+            const maxPossiblePoints = Math.max(0, currentDay - 1);
+            
+            const validatedData = {
+              ...userDataFromDb,
+              currentDay: Math.max(1, currentDay),
+              streakCount: Math.min(userDataFromDb.streakCount || 0, maxPossibleStreak),
+              points: Math.min(userDataFromDb.points || 0, maxPossiblePoints)
+            };
+            
+            setUserData(validatedData);
+          } else {
+            setUserData(null);
+          }
         } catch (error) {
           console.error('Error fetching user data:', error);
           setUserData(null);
