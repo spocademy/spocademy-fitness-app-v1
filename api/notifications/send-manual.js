@@ -11,7 +11,7 @@ export default async function handler(req, res) {
       villages = [], 
       levels = [], 
       activityStatus = ['all'],
-      scheduleType = 'now', // 'now' or 'scheduled'
+      scheduleType = 'now',
       scheduledDateTime = null,
       adminUserId 
     } = req.body;
@@ -37,13 +37,12 @@ export default async function handler(req, res) {
         }
       };
 
-      // Store scheduled notification
+      // Store scheduled notification - FIXED AUTHENTICATION
       const scheduleResponse = await fetch(
-        `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/scheduledNotifications`,
+        `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/scheduledNotifications?key=${process.env.FIREBASE_API_KEY}`,
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${await getAccessToken()}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(scheduledNotification)
@@ -64,28 +63,26 @@ export default async function handler(req, res) {
     // Send immediately
     console.log('Sending manual notification:', { title, message, villages, levels, activityStatus });
 
-    // Get all users
+    // Get all users - FIXED AUTHENTICATION
     const usersResponse = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/users`,
-      {
-        headers: {
-          'Authorization': `Bearer ${await getAccessToken()}`
-        }
-      }
+      `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/users?key=${process.env.FIREBASE_API_KEY}`
     );
+
+    if (!usersResponse.ok) {
+      throw new Error('Failed to fetch users');
+    }
 
     const usersData = await usersResponse.json();
     const users = usersData.documents || [];
 
-    // Get user notification tokens
+    // Get user notification tokens - FIXED AUTHENTICATION
     const tokensResponse = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/userNotifications`,
-      {
-        headers: {
-          'Authorization': `Bearer ${await getAccessToken()}`
-        }
-      }
+      `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/userNotifications?key=${process.env.FIREBASE_API_KEY}`
     );
+
+    if (!tokensResponse.ok) {
+      throw new Error('Failed to fetch user tokens');
+    }
 
     const tokensData = await tokensResponse.json();
     const userTokens = {};
@@ -102,15 +99,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // Get inactive user data for activity filtering
-    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    console.log('Found tokens for users:', Object.keys(userTokens).length);
 
     const notifications = [];
     const today = new Date().toISOString().split('T')[0];
     let targetedUsers = [];
 
-    // Filter users based on criteria - FIXED LOGIC
+    // Process each user - SIMPLIFIED TARGETING LOGIC
     for (const userDoc of users) {
       const userId = userDoc.name.split('/').pop();
       const fields = userDoc.fields || {};
@@ -123,12 +118,10 @@ export default async function handler(req, res) {
 
       let shouldInclude = false;
       
-      // FIXED: Check if "all" is selected first
+      // SIMPLIFIED: If "all" is selected, include everyone with tokens
       if (activityStatus.includes('all')) {
         shouldInclude = true;
       } else {
-        // Only apply specific filters if "all" is NOT selected
-        
         // Village filtering
         if (villages.length > 0) {
           const userVillage = fields.village ? fields.village.stringValue : '';
@@ -145,29 +138,19 @@ export default async function handler(req, res) {
           }
         }
         
-        // Activity status filtering
-        if (activityStatus.includes('inactive_2_days') || activityStatus.includes('inactive_7_days')) {
-          const lastActive = fields.lastActive ? fields.lastActive.timestampValue : null;
-          
-          if (activityStatus.includes('inactive_7_days') && (!lastActive || lastActive < sevenDaysAgo)) {
-            shouldInclude = true;
-          } else if (activityStatus.includes('inactive_2_days') && (!lastActive || lastActive < twoDaysAgo)) {
-            shouldInclude = true;
-          }
-        }
-        
-        // If no specific filters selected, include everyone with tokens
-        if (villages.length === 0 && levels.length === 0 && 
-            !activityStatus.includes('inactive_2_days') && !activityStatus.includes('inactive_7_days')) {
+        // If no specific targeting, include everyone
+        if (villages.length === 0 && levels.length === 0) {
           shouldInclude = true;
         }
       }
       
       if (!shouldInclude) continue;
 
+      const userName = fields.name ? fields.name.stringValue : 'User';
+      
       targetedUsers.push({
         userId,
-        name: fields.name ? fields.name.stringValue : 'User',
+        name: userName,
         village: fields.village ? fields.village.stringValue : '',
         level: fields.level ? fields.level.stringValue : ''
       });
@@ -206,8 +189,8 @@ export default async function handler(req, res) {
       notifications.push(fcmMessage);
     }
 
-    // Get access token for FCM HTTP v1
-    const accessToken = await getFirebaseAccessToken();
+    console.log('Targeted users:', targetedUsers.length);
+    console.log('Notifications to send:', notifications.length);
 
     // Send notifications using FCM HTTP v1 API
     let successCount = 0;
@@ -222,7 +205,7 @@ export default async function handler(req, res) {
         const response = await fetch(`https://fcm.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/messages:send`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            'Authorization': `Bearer ${process.env.FIREBASE_API_KEY}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(message)
@@ -244,18 +227,17 @@ export default async function handler(req, res) {
             userId: user.userId,
             name: user.name,
             status: 'failed',
-            error: errorText
+            error: errorText.substring(0, 100)
           });
-          console.error('FCM send failed:', errorText);
+          console.error('FCM send failed for user:', user.name, errorText);
         }
 
-        // Track notification analytics
+        // Track notification analytics - FIXED AUTHENTICATION
         await fetch(
-          `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/notificationAnalytics`,
+          `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/notificationAnalytics?key=${process.env.FIREBASE_API_KEY}`,
           {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${await getAccessToken()}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -281,7 +263,7 @@ export default async function handler(req, res) {
           status: 'error',
           error: error.message
         });
-        console.error('Notification send error:', error);
+        console.error('Notification send error for user:', user.name, error);
       }
     }
 
@@ -303,15 +285,4 @@ export default async function handler(req, res) {
       message: error.message 
     });
   }
-}
-
-// Get Firebase access token using service account key simulation
-async function getFirebaseAccessToken() {
-  // For now, return API key - you'll need proper service account for production
-  return process.env.FIREBASE_API_KEY;
-}
-
-// Get basic access token
-async function getAccessToken() {
-  return process.env.FIREBASE_API_KEY;
 }
