@@ -1,25 +1,21 @@
-// public/sw.js
-// Enhanced service worker for PWA with FCM support
-
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
-import { getMessaging, onBackgroundMessage } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging.js';
+// public/sw.js - Complete service worker with FCM + all features
+importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging-compat.js');
 
 // Firebase configuration
-const firebaseConfig = {
+firebase.initializeApp({
   apiKey: "AIzaSyC_Fm-hxEyAZigpydCWH1n7Y8IUrNe9qxM",
   authDomain: "spocademy-mvp1.firebaseapp.com",
   projectId: "spocademy-mvp1",
   storageBucket: "spocademy-mvp1.firebasestorage.app",
   messagingSenderId: "910046288653",
   appId: "1:910046288653:web:2e836eb413309925d26e44"
-};
+});
 
-// Initialize Firebase in service worker
-const app = initializeApp(firebaseConfig);
-const messaging = getMessaging(app);
+const messaging = firebase.messaging();
 
 // Handle background messages
-onBackgroundMessage(messaging, (payload) => {
+messaging.onBackgroundMessage((payload) => {
   console.log('Received background message: ', payload);
   
   const notificationTitle = payload.notification?.title || 'Spocademy Training';
@@ -45,7 +41,8 @@ onBackgroundMessage(messaging, (payload) => {
     data: {
       url: payload.data?.url || '/',
       timestamp: Date.now(),
-      type: payload.data?.type || 'training_reminder'
+      type: payload.data?.type || 'training_reminder',
+      userId: payload.data?.userId
     }
   };
 
@@ -65,7 +62,7 @@ async function trackNotificationDelivery(notificationType) {
       status: 'delivered'
     };
     
-    // Send to analytics endpoint (you'll implement this)
+    // Send to analytics endpoint
     fetch('/api/track-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
