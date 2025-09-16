@@ -110,7 +110,7 @@ export default async function handler(req, res) {
     const today = new Date().toISOString().split('T')[0];
     let targetedUsers = [];
 
-    // Filter users based on criteria
+    // Filter users based on criteria - FIXED LOGIC
     for (const userDoc of users) {
       const userId = userDoc.name.split('/').pop();
       const fields = userDoc.fields || {};
@@ -123,31 +123,42 @@ export default async function handler(req, res) {
 
       let shouldInclude = false;
       
-      // Village filtering
-      if (villages.length > 0) {
-        const userVillage = fields.village ? fields.village.stringValue : '';
-        shouldInclude = villages.some(village => 
-          userVillage.toLowerCase().includes(village.toLowerCase())
-        );
-      }
-      
-      // Level filtering
-      if (levels.length > 0) {
-        const userLevel = fields.level ? fields.level.stringValue : '';
-        if (shouldInclude || villages.length === 0) {
-          shouldInclude = levels.includes(userLevel);
-        }
-      }
-      
-      // Activity status filtering
-      if (activityStatus.includes('all') || (villages.length === 0 && levels.length === 0)) {
+      // FIXED: Check if "all" is selected first
+      if (activityStatus.includes('all')) {
         shouldInclude = true;
-      } else if (activityStatus.includes('inactive_2_days') || activityStatus.includes('inactive_7_days')) {
-        const lastActive = fields.lastActive ? fields.lastActive.timestampValue : null;
+      } else {
+        // Only apply specific filters if "all" is NOT selected
         
-        if (activityStatus.includes('inactive_7_days') && (!lastActive || lastActive < sevenDaysAgo)) {
-          shouldInclude = true;
-        } else if (activityStatus.includes('inactive_2_days') && (!lastActive || lastActive < twoDaysAgo)) {
+        // Village filtering
+        if (villages.length > 0) {
+          const userVillage = fields.village ? fields.village.stringValue : '';
+          shouldInclude = villages.some(village => 
+            userVillage.toLowerCase().includes(village.toLowerCase())
+          );
+        }
+        
+        // Level filtering
+        if (levels.length > 0) {
+          const userLevel = fields.level ? fields.level.stringValue : '';
+          if (shouldInclude || villages.length === 0) {
+            shouldInclude = levels.includes(userLevel);
+          }
+        }
+        
+        // Activity status filtering
+        if (activityStatus.includes('inactive_2_days') || activityStatus.includes('inactive_7_days')) {
+          const lastActive = fields.lastActive ? fields.lastActive.timestampValue : null;
+          
+          if (activityStatus.includes('inactive_7_days') && (!lastActive || lastActive < sevenDaysAgo)) {
+            shouldInclude = true;
+          } else if (activityStatus.includes('inactive_2_days') && (!lastActive || lastActive < twoDaysAgo)) {
+            shouldInclude = true;
+          }
+        }
+        
+        // If no specific filters selected, include everyone with tokens
+        if (villages.length === 0 && levels.length === 0 && 
+            !activityStatus.includes('inactive_2_days') && !activityStatus.includes('inactive_7_days')) {
           shouldInclude = true;
         }
       }
