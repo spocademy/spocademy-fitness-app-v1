@@ -37,7 +37,6 @@ export default async function handler(req, res) {
         }
       };
 
-      // Store scheduled notification - FIXED AUTHENTICATION
       const scheduleResponse = await fetch(
         `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/scheduledNotifications?key=${process.env.FIREBASE_API_KEY}`,
         {
@@ -63,7 +62,7 @@ export default async function handler(req, res) {
     // Send immediately
     console.log('Sending manual notification:', { title, message, villages, levels, activityStatus });
 
-    // Get all users - FIXED AUTHENTICATION
+    // Get all users
     const usersResponse = await fetch(
       `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/users?key=${process.env.FIREBASE_API_KEY}`
     );
@@ -75,7 +74,7 @@ export default async function handler(req, res) {
     const usersData = await usersResponse.json();
     const users = usersData.documents || [];
 
-    // Get user notification tokens - FIXED AUTHENTICATION
+    // Get user notification tokens
     const tokensResponse = await fetch(
       `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/userNotifications?key=${process.env.FIREBASE_API_KEY}`
     );
@@ -105,7 +104,7 @@ export default async function handler(req, res) {
     const today = new Date().toISOString().split('T')[0];
     let targetedUsers = [];
 
-    // Process each user - SIMPLIFIED TARGETING LOGIC
+    // Process each user
     for (const userDoc of users) {
       const userId = userDoc.name.split('/').pop();
       const fields = userDoc.fields || {};
@@ -118,7 +117,7 @@ export default async function handler(req, res) {
 
       let shouldInclude = false;
       
-      // SIMPLIFIED: If "all" is selected, include everyone with tokens
+      // If "all" is selected, include everyone with tokens
       if (activityStatus.includes('all')) {
         shouldInclude = true;
       } else {
@@ -155,34 +154,19 @@ export default async function handler(req, res) {
         level: fields.level ? fields.level.stringValue : ''
       });
 
-      // Create FCM message using HTTP v1 format
+      // Create FCM message using LEGACY format (works with API key)
       const fcmMessage = {
-        message: {
-          token: fcmToken,
-          notification: {
-            title: title,
-            body: message
-          },
-          data: {
-            type: 'manual_notification',
-            url: '/',
-            userId: userId
-          },
-          android: {
-            priority: 'high',
-            notification: {
-              sound: 'default',
-              channel_id: 'spocademy_notifications'
-            }
-          },
-          apns: {
-            payload: {
-              aps: {
-                sound: 'default',
-                badge: 1
-              }
-            }
-          }
+        to: fcmToken,
+        notification: {
+          title: title,
+          body: message,
+          icon: '/logo192.png',
+          click_action: 'https://fitness.spocademy.com/'
+        },
+        data: {
+          type: 'manual_notification',
+          url: '/',
+          userId: userId
         }
       };
 
@@ -192,7 +176,7 @@ export default async function handler(req, res) {
     console.log('Targeted users:', targetedUsers.length);
     console.log('Notifications to send:', notifications.length);
 
-    // Send notifications using FCM HTTP v1 API
+    // Send notifications using FCM LEGACY API (works with API key)
     let successCount = 0;
     let failureCount = 0;
     let deliveryResults = [];
@@ -202,37 +186,37 @@ export default async function handler(req, res) {
       const user = targetedUsers[i];
       
       try {
-        const response = await fetch(`https://fcm.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/messages:send`, {
+        const response = await fetch('https://fcm.googleapis.com/fcm/send', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${process.env.FIREBASE_API_KEY}`,
+            'Authorization': `key=${process.env.FIREBASE_API_KEY}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(message)
         });
 
-        if (response.ok) {
-          const result = await response.json();
+        const result = await response.json();
+
+        if (response.ok && result.success === 1) {
           successCount++;
           deliveryResults.push({
             userId: user.userId,
             name: user.name,
             status: 'sent',
-            messageId: result.name
+            messageId: result.results?.[0]?.message_id
           });
         } else {
           failureCount++;
-          const errorText = await response.text();
           deliveryResults.push({
             userId: user.userId,
             name: user.name,
             status: 'failed',
-            error: errorText.substring(0, 100)
+            error: result.results?.[0]?.error || 'Unknown error'
           });
-          console.error('FCM send failed for user:', user.name, errorText);
+          console.error('FCM send failed for user:', user.name, result);
         }
 
-        // Track notification analytics - FIXED AUTHENTICATION
+        // Track notification analytics
         await fetch(
           `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/notificationAnalytics?key=${process.env.FIREBASE_API_KEY}`,
           {
@@ -244,7 +228,7 @@ export default async function handler(req, res) {
               fields: {
                 userId: { stringValue: user.userId },
                 type: { stringValue: 'manual_notification' },
-                status: { stringValue: response.ok ? 'sent' : 'failed' },
+                status: { stringValue: response.ok && result.success === 1 ? 'sent' : 'failed' },
                 timestamp: { timestampValue: new Date().toISOString() },
                 date: { stringValue: today },
                 adminId: { stringValue: adminUserId },

@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
     console.log('Starting evening check notifications...');
 
-    // Get all users - FIXED AUTHENTICATION
+    // Get all users
     const usersResponse = await fetch(
       `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/users?key=${process.env.FIREBASE_API_KEY}`
     );
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     const usersData = await usersResponse.json();
     const users = usersData.documents || [];
 
-    // Get user notification tokens - FIXED AUTHENTICATION
+    // Get user notification tokens
     const tokensResponse = await fetch(
       `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/userNotifications?key=${process.env.FIREBASE_API_KEY}`
     );
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
       const fcmToken = userTokens[userId];
       if (!fcmToken) continue;
 
-      // Check if user already completed today - FIXED AUTHENTICATION
+      // Check if user already completed today
       const completionResponse = await fetch(
         `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/dailyCompletions/${userId}_${today}?key=${process.env.FIREBASE_API_KEY}`
       );
@@ -70,40 +70,25 @@ export default async function handler(req, res) {
       const userName = fields.name ? fields.name.stringValue : 'Champion';
       const currentDay = fields.currentDay ? fields.currentDay.integerValue : '1';
 
-      // Create FCM message using HTTP v1 format
+      // Create FCM message using LEGACY format
       const message = {
-        message: {
-          token: fcmToken,
-          notification: {
-            title: 'Training Reminder',
-            body: `${userName}, 2 hours left to complete Day ${currentDay}. Keep your streak alive!`
-          },
-          data: {
-            type: 'evening_check',
-            url: '/',
-            userId: userId
-          },
-          android: {
-            priority: 'high',
-            notification: {
-              sound: 'default',
-              channel_id: 'spocademy_notifications'
-            }
-          },
-          apns: {
-            payload: {
-              aps: {
-                sound: 'default',
-                badge: 1
-              }
-            }
-          }
+        to: fcmToken,
+        notification: {
+          title: 'Training Reminder',
+          body: `${userName}, 2 hours left to complete Day ${currentDay}. Keep your streak alive!`,
+          icon: '/logo192.png',
+          click_action: 'https://fitness.spocademy.com/'
+        },
+        data: {
+          type: 'evening_check',
+          url: '/',
+          userId: userId
         }
       };
 
       notifications.push(message);
 
-      // Track notification analytics - FIXED AUTHENTICATION
+      // Track notification analytics
       await fetch(
         `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/notificationAnalytics?key=${process.env.FIREBASE_API_KEY}`,
         {
@@ -124,27 +109,28 @@ export default async function handler(req, res) {
       );
     }
 
-    // Send notifications using FCM HTTP v1 API
+    // Send notifications using FCM LEGACY API
     let successCount = 0;
     let failureCount = 0;
 
     for (const message of notifications) {
       try {
-        const response = await fetch(`https://fcm.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/messages:send`, {
+        const response = await fetch('https://fcm.googleapis.com/fcm/send', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${process.env.FIREBASE_API_KEY}`,
+            'Authorization': `key=${process.env.FIREBASE_API_KEY}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(message)
         });
 
-        if (response.ok) {
+        const result = await response.json();
+
+        if (response.ok && result.success === 1) {
           successCount++;
         } else {
           failureCount++;
-          const errorText = await response.text();
-          console.error('FCM send failed:', errorText);
+          console.error('FCM send failed:', result);
         }
       } catch (error) {
         failureCount++;
