@@ -29,7 +29,7 @@ const AdminDashboard = () => {
     completionRate: 0,
     villages: 0
   });
-  const { logout } = useAuth();
+  const { logout, currentUser } = useAuth();
 
   // New user form state
   const [newUser, setNewUser] = useState({
@@ -68,6 +68,21 @@ const AdminDashboard = () => {
     saturday: [],
     sunday: []
   });
+
+  // Manual notification state
+  const [notificationForm, setNotificationForm] = useState({
+    title: '',
+    message: '',
+    villages: [],
+    levels: [],
+    activityStatus: ['all'],
+    scheduleType: 'now',
+    scheduledDateTime: ''
+  });
+
+  const [notificationResult, setNotificationResult] = useState(null);
+  const [sendingNotification, setSendingNotification] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
 
   // Exercise options
   const exerciseOptions = {
@@ -117,6 +132,189 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Get unique villages and levels for notification targeting
+  const getUniqueVillages = () => {
+    const villages = [...new Set(users.map(user => user.village).filter(Boolean))];
+    return villages.sort();
+  };
+
+  const getUniqueLevels = () => {
+    return ['beginnerBoys', 'beginnerGirls', 'advancedBoys', 'advancedGirls', 'specialBatch'];
+  };
+
+  // Handle notification form changes
+  const handleNotificationFormChange = (field, value) => {
+    setNotificationForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Clear preview when form changes
+    setPreviewData(null);
+    setNotificationResult(null);
+  };
+
+  // Handle multi-select for villages and levels
+  const handleMultiSelect = (field, value, checked) => {
+    setNotificationForm(prev => ({
+      ...prev,
+      [field]: checked 
+        ? [...prev[field], value]
+        : prev[field].filter(item => item !== value)
+    }));
+    setPreviewData(null);
+  };
+
+  // Validate notification form
+  const validateNotificationForm = () => {
+    const errors = [];
+    if (!notificationForm.title || notificationForm.title.trim().length < 3) {
+      errors.push('Title must be at least 3 characters');
+    }
+    if (!notificationForm.message || notificationForm.message.trim().length < 10) {
+      errors.push('Message must be at least 10 characters');
+    }
+    if (notificationForm.title.length > 50) {
+      errors.push('Title too long (max 50 characters)');
+    }
+    if (notificationForm.message.length > 200) {
+      errors.push('Message too long (max 200 characters)');
+    }
+    if (notificationForm.scheduleType === 'scheduled' && !notificationForm.scheduledDateTime) {
+      errors.push('Please select date and time for scheduled notification');
+    }
+    return errors;
+  };
+
+  // Preview notification targeting
+  const handlePreviewNotification = () => {
+    const errors = validateNotificationForm();
+    if (errors.length > 0) {
+      alert('Please fix these errors:\n' + errors.join('\n'));
+      return;
+    }
+
+    // Calculate targeted users
+    let targetedUsers = users.filter(user => user.role !== 'admin');
+    let targetedCount = 0;
+
+    const { villages, levels, activityStatus } = notificationForm;
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    targetedUsers.forEach(user => {
+      let shouldInclude = false;
+      
+      // Village filtering
+      if (villages.length > 0) {
+        shouldInclude = villages.some(village => 
+          user.village && user.village.toLowerCase().includes(village.toLowerCase())
+        );
+      }
+      
+      // Level filtering
+      if (levels.length > 0) {
+        if (shouldInclude || villages.length === 0) {
+          shouldInclude = levels.includes(user.level);
+        }
+      }
+      
+      // Activity status filtering
+      if (activityStatus.includes('all') || (villages.length === 0 && levels.length === 0)) {
+        shouldInclude = true;
+      } else if (activityStatus.includes('inactive_2_days') || activityStatus.includes('inactive_7_days')) {
+        const lastActive = user.lastActive ? new Date(user.lastActive.seconds * 1000) : null;
+        
+        if (activityStatus.includes('inactive_7_days') && (!lastActive || lastActive < sevenDaysAgo)) {
+          shouldInclude = true;
+        } else if (activityStatus.includes('inactive_2_days') && (!lastActive || lastActive < twoDaysAgo)) {
+          shouldInclude = true;
+        }
+      }
+      
+      if (shouldInclude) targetedCount++;
+    });
+
+    setPreviewData({
+      targetedCount,
+      totalUsers: users.length - 1, // Exclude admin
+      villages: villages.length > 0 ? villages : ['All'],
+      levels: levels.length > 0 ? levels : ['All'],
+      activityStatus
+    });
+  };
+
+  // Send manual notification
+  const handleSendNotification = async () => {
+    const errors = validateNotificationForm();
+    if (errors.length > 0) {
+      alert('Please fix these errors:\n' + errors.join('\n'));
+      return;
+    }
+
+    if (!previewData) {
+      alert('Please preview the notification first');
+      return;
+    }
+
+    setSendingNotification(true);
+    setNotificationResult(null);
+
+    try {
+      const response = await fetch('/api/notifications/send-manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...notificationForm,
+          adminUserId: currentUser.uid
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setNotificationResult({
+          success: true,
+          ...result
+        });
+        
+        // Clear form on successful send
+        if (notificationForm.scheduleType === 'now') {
+          setNotificationForm({
+            title: '',
+            message: '',
+            villages: [],
+            levels: [],
+            activityStatus: ['all'],
+            scheduleType: 'now',
+            scheduledDateTime: ''
+          });
+          setPreviewData(null);
+        }
+      } else {
+        setNotificationResult({
+          success: false,
+          error: result.error || 'Failed to send notification'
+        });
+      }
+    } catch (error) {
+      console.error('Send notification error:', error);
+      setNotificationResult({
+        success: false,
+        error: 'Network error. Please try again.'
+      });
+    } finally {
+      setSendingNotification(false);
+    }
+  };
+
+  // Clear notification result
+  const clearNotificationResult = () => {
+    setNotificationResult(null);
   };
 
   const handleCreateUser = async (e) => {
@@ -385,6 +583,12 @@ const AdminDashboard = () => {
           >
             Schedule
           </button>
+          <button 
+            className={`nav-tab ${activeTab === 'notifications' ? 'active' : ''}`}
+            onClick={() => setActiveTab('notifications')}
+          >
+            Notifications
+          </button>
         </div>
       </div>
 
@@ -431,6 +635,240 @@ const AdminDashboard = () => {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'notifications' && (
+          <div className="notifications-tab">
+            <div className="form-section">
+              <h3>Send Manual Notification</h3>
+              
+              {/* Title and Message */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Title</label>
+                  <input
+                    type="text"
+                    placeholder="Training Update"
+                    value={notificationForm.title}
+                    onChange={(e) => handleNotificationFormChange('title', e.target.value)}
+                    maxLength="50"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Message</label>
+                  <textarea
+                    placeholder="New workout plans are now available for all levels"
+                    value={notificationForm.message}
+                    onChange={(e) => handleNotificationFormChange('message', e.target.value)}
+                    maxLength="200"
+                    style={{ minHeight: '80px', resize: 'vertical' }}
+                  />
+                </div>
+              </div>
+
+              {/* Village Targeting */}
+              <div className="form-group">
+                <label>Target Villages (leave empty for all)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '8px' }}>
+                  {getUniqueVillages().map(village => (
+                    <label key={village} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={notificationForm.villages.includes(village)}
+                        onChange={(e) => handleMultiSelect('villages', village, e.target.checked)}
+                        style={{ marginRight: '6px' }}
+                      />
+                      <span>{village}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Level Targeting */}
+              <div className="form-group">
+                <label>Target Levels (leave empty for all)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '8px' }}>
+                  {getUniqueLevels().map(level => (
+                    <label key={level} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={notificationForm.levels.includes(level)}
+                        onChange={(e) => handleMultiSelect('levels', level, e.target.checked)}
+                        style={{ marginRight: '6px' }}
+                      />
+                      <span>{level}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Activity Targeting */}
+              <div className="form-group">
+                <label>Activity Status</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '8px' }}>
+                  {[
+                    { key: 'all', label: 'All Users' },
+                    { key: 'inactive_2_days', label: 'Inactive 2+ Days' },
+                    { key: 'inactive_7_days', label: 'Inactive 7+ Days' }
+                  ].map(status => (
+                    <label key={status.key} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={notificationForm.activityStatus.includes(status.key)}
+                        onChange={(e) => handleMultiSelect('activityStatus', status.key, e.target.checked)}
+                        style={{ marginRight: '6px' }}
+                      />
+                      <span>{status.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Scheduling */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Send Time</label>
+                  <select
+                    value={notificationForm.scheduleType}
+                    onChange={(e) => handleNotificationFormChange('scheduleType', e.target.value)}
+                  >
+                    <option value="now">Send Now</option>
+                    <option value="scheduled">Schedule for Later</option>
+                  </select>
+                </div>
+                {notificationForm.scheduleType === 'scheduled' && (
+                  <div className="form-group">
+                    <label>Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={notificationForm.scheduledDateTime}
+                      onChange={(e) => handleNotificationFormChange('scheduledDateTime', e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                <button 
+                  onClick={handlePreviewNotification} 
+                  className="btn btn-secondary"
+                  disabled={loading}
+                >
+                  Preview Targeting
+                </button>
+                <button 
+                  onClick={handleSendNotification} 
+                  className="btn btn-primary"
+                  disabled={sendingNotification || !previewData}
+                >
+                  {sendingNotification ? 'Sending...' : 
+                   notificationForm.scheduleType === 'scheduled' ? 'Schedule Notification' : 'Send Now'}
+                </button>
+                {notificationResult && (
+                  <button 
+                    onClick={clearNotificationResult} 
+                    className="btn btn-secondary"
+                  >
+                    Clear Results
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Preview Results */}
+            {previewData && (
+              <div className="form-section" style={{ background: '#f0f8ff' }}>
+                <h3>Notification Preview</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                  <div>
+                    <strong>Targeted Users:</strong> {previewData.targetedCount} / {previewData.totalUsers}
+                  </div>
+                  <div>
+                    <strong>Villages:</strong> {previewData.villages.join(', ')}
+                  </div>
+                  <div>
+                    <strong>Levels:</strong> {previewData.levels.join(', ')}
+                  </div>
+                  <div>
+                    <strong>Activity:</strong> {previewData.activityStatus.join(', ')}
+                  </div>
+                </div>
+                <div style={{ marginTop: '12px', padding: '12px', background: 'white', borderRadius: '8px' }}>
+                  <strong>Preview:</strong><br />
+                  <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '4px' }}>
+                    {notificationForm.title}
+                  </div>
+                  <div style={{ color: '#666' }}>
+                    {notificationForm.message}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Send Results */}
+            {notificationResult && (
+              <div className="form-section" style={{ 
+                background: notificationResult.success ? '#f0fff4' : '#fef2f2' 
+              }}>
+                <h3>{notificationResult.success ? 'Notification Sent Successfully!' : 'Send Failed'}</h3>
+                
+                {notificationResult.success ? (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                      <div>
+                        <strong>Total Sent:</strong> {notificationResult.sent || 0}
+                      </div>
+                      <div>
+                        <strong>Failed:</strong> {notificationResult.failed || 0}
+                      </div>
+                      <div>
+                        <strong>Success Rate:</strong> {
+                          notificationResult.total > 0 
+                            ? Math.round((notificationResult.sent / notificationResult.total) * 100) 
+                            : 0
+                        }%
+                      </div>
+                      {notificationResult.scheduled && (
+                        <div>
+                          <strong>Status:</strong> Scheduled
+                        </div>
+                      )}
+                    </div>
+                    
+                    {notificationResult.deliveryResults && notificationResult.deliveryResults.length > 0 && (
+                      <div>
+                        <h4>Delivery Details:</h4>
+                        <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
+                          {notificationResult.deliveryResults.map((result, index) => (
+                            <div key={index} style={{ 
+                              padding: '8px 12px', 
+                              borderBottom: '1px solid #eee',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              backgroundColor: result.status === 'sent' ? '#f9f9f9' : '#fff5f5'
+                            }}>
+                              <span>{result.name}</span>
+                              <span style={{ 
+                                color: result.status === 'sent' ? '#10b981' : '#ef4444',
+                                fontWeight: '600'
+                              }}>
+                                {result.status === 'sent' ? '✓ Sent' : '✗ Failed'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ color: '#ef4444' }}>
+                    <strong>Error:</strong> {notificationResult.error}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
