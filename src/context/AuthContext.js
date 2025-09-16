@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../services/firebase/config';
 import { getUserData } from '../services/firebaseService';
+import { requestNotificationPermission, onForegroundMessage } from '../services/notificationService';
 
 const AuthContext = createContext();
 
@@ -20,6 +21,7 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notificationPermission, setNotificationPermission] = useState(null);
 
   // Set persistence to keep users logged in
   useEffect(() => {
@@ -34,6 +36,24 @@ export const AuthProvider = ({ children }) => {
     
     initializeAuth();
   }, []);
+
+  // Setup notification listeners when user logs in
+  useEffect(() => {
+    if (currentUser) {
+      // Setup foreground message listener
+      const unsubscribe = onForegroundMessage((payload) => {
+        console.log('Received foreground notification:', payload);
+        
+        // Show custom notification or handle as needed
+        if (payload.notification) {
+          // You can customize this to show in-app notifications
+          console.log('Notification received while app is open:', payload.notification);
+        }
+      });
+
+      return unsubscribe;
+    }
+  }, [currentUser]);
 
   const login = async (phone, password) => {
     try {
@@ -50,6 +70,23 @@ export const AuthProvider = ({ children }) => {
       const userDataFromDb = await getUserData(userCredential.user.uid);
       setUserData(userDataFromDb);
       
+      // Request notification permission after successful login
+      setTimeout(async () => {
+        try {
+          const token = await requestNotificationPermission(userCredential.user.uid);
+          if (token) {
+            setNotificationPermission('granted');
+            console.log('Notification permission granted and token saved');
+          } else {
+            setNotificationPermission('denied');
+            console.log('Notification permission denied or failed');
+          }
+        } catch (error) {
+          console.error('Error setting up notifications:', error);
+          setNotificationPermission('error');
+        }
+      }, 1000); // Small delay to let user see successful login first
+      
       return userCredential;
     } catch (error) {
       console.error('Login error:', error);
@@ -61,6 +98,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await signOut(auth);
       setUserData(null);
+      setNotificationPermission(null);
     } catch (error) {
       console.error('Logout error:', error);
       throw error;
@@ -130,6 +168,7 @@ export const AuthProvider = ({ children }) => {
         }
       } else {
         setUserData(null);
+        setNotificationPermission(null);
       }
       
       setLoading(false);
@@ -143,7 +182,8 @@ export const AuthProvider = ({ children }) => {
     userData,
     login,
     logout,
-    refreshUserData
+    refreshUserData,
+    notificationPermission
   };
 
   return (

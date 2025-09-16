@@ -54,7 +54,8 @@ const AdminDashboard = () => {
     day: 'monday',
     level: 'beginnerBoys',
     week: 1,
-    taskPlans: {}
+    taskPlans: {},
+    excludedTasks: []
   });
 
   // Weekly schedule form state
@@ -226,11 +227,20 @@ const AdminDashboard = () => {
       }
       
       const tasksForDay = weeklySchedule[newPlan.day];
+      const excludedTasks = newPlan.excludedTasks || [];
+      
+      // Filter out excluded tasks
+      const includedTasks = tasksForDay.filter(taskId => !excludedTasks.includes(taskId));
+      
+      if (includedTasks.length === 0) {
+        alert('No tasks selected for this plan. Please include at least one task.');
+        return;
+      }
       
       // Prepare consolidated tasks data
       const consolidatedTasks = [];
       
-      for (const taskId of tasksForDay) {
+      for (const taskId of includedTasks) {
         const task = tasks.find(t => t.id === taskId);
         const taskPlan = newPlan.taskPlans?.[taskId];
         
@@ -251,12 +261,13 @@ const AdminDashboard = () => {
       // Create one consolidated plan
       const planId = await createDailyPlan(newPlan.day, newPlan.week, newPlan.level, consolidatedTasks);
       
-      alert(`Consolidated plan created: ${planId} for ${newPlan.day} Week ${newPlan.week} ${newPlan.level}!`);
+      alert(`Consolidated plan created: ${planId} for ${newPlan.day} Week ${newPlan.week} ${newPlan.level}!\nIncluded ${consolidatedTasks.length} tasks.`);
       
-      // Reset task plans for next entry
+      // Reset task plans and exclusions for next entry
       setNewPlan({
         ...newPlan,
-        taskPlans: {}
+        taskPlans: {},
+        excludedTasks: []
       });
       
       fetchAllData();
@@ -301,6 +312,23 @@ const AdminDashboard = () => {
       setScheduleForm({
         ...scheduleForm,
         [day]: [...currentTasks, taskId]
+      });
+    }
+  };
+
+  const toggleTaskExclusion = (taskId) => {
+    const currentExcluded = newPlan.excludedTasks || [];
+    const isExcluded = currentExcluded.includes(taskId);
+    
+    if (isExcluded) {
+      setNewPlan({
+        ...newPlan,
+        excludedTasks: currentExcluded.filter(id => id !== taskId)
+      });
+    } else {
+      setNewPlan({
+        ...newPlan,
+        excludedTasks: [...currentExcluded, taskId]
       });
     }
   };
@@ -652,21 +680,44 @@ const AdminDashboard = () => {
                 <div style={{marginTop: '20px'}}>
                   <h4>Tasks for {newPlan.day.charAt(0).toUpperCase() + newPlan.day.slice(1)}:</h4>
                   <p style={{color: '#666', marginBottom: '15px'}}>
-                    This will create ONE consolidated plan (ID: {newPlan.day.slice(0,3)}W{newPlan.week}{newPlan.level.slice(0,2).toUpperCase()}) containing all tasks below:
+                    This will create ONE consolidated plan (ID: {newPlan.day.slice(0,3)}W{newPlan.week}{newPlan.level.slice(0,2).toUpperCase()}) containing selected tasks below:
                   </p>
                   {weeklySchedule[newPlan.day].map(taskId => {
                     const task = tasks.find(t => t.id === taskId);
                     if (!task) return null;
                     
+                    // Check if task is excluded for this plan
+                    const isExcluded = newPlan.excludedTasks && newPlan.excludedTasks.includes(taskId);
+                    
                     return (
                       <div key={taskId} style={{
-                        border: '1px solid #ddd',
+                        border: isExcluded ? '1px solid #ef4444' : '1px solid #ddd',
                         padding: '15px',
                         marginBottom: '10px',
-                        borderRadius: '8px'
+                        borderRadius: '8px',
+                        backgroundColor: isExcluded ? '#fef2f2' : 'white',
+                        opacity: isExcluded ? 0.6 : 1
                       }}>
-                        <h5>{task.name?.en} ({task.type})</h5>
-                        {task.type !== 'nutrition' && (
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px'}}>
+                          <h5 style={{margin: 0}}>{task.name?.en} ({task.type})</h5>
+                          <button
+                            onClick={() => toggleTaskExclusion(taskId)}
+                            style={{
+                              background: isExcluded ? '#10b981' : '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              fontWeight: '600'
+                            }}
+                          >
+                            {isExcluded ? 'Include' : 'Exclude'}
+                          </button>
+                        </div>
+                        
+                        {!isExcluded && task.type !== 'nutrition' && (
                           <div className="form-row">
                             <div className="form-group">
                               <label>Reps</label>
@@ -727,9 +778,14 @@ const AdminDashboard = () => {
                             </div>
                           </div>
                         )}
-                        {task.type === 'nutrition' && (
+                        {!isExcluded && task.type === 'nutrition' && (
                           <p style={{color: '#666', fontStyle: 'italic'}}>
                             Nutrition tasks don't require reps/sets configuration
+                          </p>
+                        )}
+                        {isExcluded && (
+                          <p style={{color: '#ef4444', fontStyle: 'italic', margin: 0}}>
+                            This task will be excluded from the plan
                           </p>
                         )}
                       </div>

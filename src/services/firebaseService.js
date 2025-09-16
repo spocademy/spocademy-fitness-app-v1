@@ -48,7 +48,331 @@ const isSameIndiaDay = (date1, date2) => {
   return india1.toDateString() === india2.toDateString();
 };
 
-// ===== USER FUNCTIONS =====
+// ===== NOTIFICATION FUNCTIONS =====
+
+// Schedule daily notifications for a user
+export const scheduleDailyNotifications = async (userId, userData) => {
+  try {
+    const today = getIndiaDate();
+    const dateStr = today.toISOString().split('T')[0];
+    
+    // Get user's FCM token
+    const userNotificationDoc = await getDoc(doc(db, 'userNotifications', userId));
+    if (!userNotificationDoc.exists() || !userNotificationDoc.data().fcmToken) {
+      console.log('No FCM token found for user:', userId);
+      return;
+    }
+    
+    const fcmToken = userNotificationDoc.data().fcmToken;
+    const currentDay = userData.currentDay || 1;
+    
+    // Create notification schedule for today
+    const notificationSchedule = {
+      userId,
+      date: dateStr,
+      currentDay,
+      fcmToken,
+      notifications: {
+        morningReminder: {
+          scheduled: true,
+          time: '05:30',
+          type: 'daily_reminder',
+          sent: false
+        },
+        eveningCheck: {
+          scheduled: true,
+          time: '16:00',
+          type: 'evening_check',
+          sent: false
+        },
+        finalReminder: {
+          scheduled: true,
+          time: '20:00',
+          type: 'streak_protection',
+          sent: false
+        },
+        hydrationReminder: {
+          scheduled: false, // Will be enabled if user completes before 10 AM
+          time: '14:00',
+          type: 'hydration',
+          sent: false
+        }
+      },
+      createdAt: serverTimestamp()
+    };
+    
+    // Special handling for Sunday
+    if (today.getDay() === 0) { // Sunday
+      notificationSchedule.notifications.weeklyProgress = {
+        scheduled: true,
+        time: '11:00',
+        type: 'weekly_progress',
+        sent: false
+      };
+    }
+    
+    const scheduleId = `${userId}_${dateStr}`;
+    await setDoc(doc(db, 'notificationSchedules', scheduleId), notificationSchedule);
+    
+    console.log('Daily notifications scheduled for user:', userId);
+    
+  } catch (error) {
+    console.error('Error scheduling daily notifications:', error);
+  }
+};
+
+// Enable hydration reminder if user completes tasks early
+export const enableHydrationReminder = async (userId) => {
+  try {
+    const today = getIndiaDate();
+    const dateStr = today.toISOString().split('T')[0];
+    const scheduleId = `${userId}_${dateStr}`;
+    
+    await updateDoc(doc(db, 'notificationSchedules', scheduleId), {
+      'notifications.hydrationReminder.scheduled': true,
+      'notifications.hydrationReminder.enabledAt': serverTimestamp()
+    });
+    
+    console.log('Hydration reminder enabled for user:', userId);
+    
+  } catch (error) {
+    console.error('Error enabling hydration reminder:', error);
+  }
+};
+
+// Mark notification as sent
+export const markNotificationSent = async (userId, notificationType) => {
+  try {
+    const today = getIndiaDate();
+    const dateStr = today.toISOString().split('T')[0];
+    const scheduleId = `${userId}_${dateStr}`;
+    
+    await updateDoc(doc(db, 'notificationSchedules', scheduleId), {
+      [`notifications.${notificationType}.sent`]: true,
+      [`notifications.${notificationType}.sentAt`]: serverTimestamp()
+    });
+    
+  } catch (error) {
+    console.error('Error marking notification as sent:', error);
+  }
+};
+
+// Get pending notifications for current time
+export const getPendingNotifications = async () => {
+  try {
+    const now = getIndiaDate();
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const dateStr = now.toISOString().split('T')[0];
+    
+    // Get all notification schedules for today
+    const schedulesSnapshot = await getDocs(
+      query(
+        collection(db, 'notificationSchedules'),
+        where('date', '==', dateStr)
+      )
+    );
+    
+    const pendingNotifications = [];
+    
+    for (const scheduleDoc of schedulesSnapshot.docs) {
+      const schedule = scheduleDoc.data();
+      const { notifications, userId, fcmToken, currentDay } = schedule;
+      
+      // Check each notification type
+      for (const [type, notification] of Object.entries(notifications)) {
+        if (notification.scheduled && !notification.sent && notification.time === currentTime) {
+          
+          // Special logic for certain notifications
+          if (type === 'eveningCheck' || type === 'finalReminder') {
+            // Check if user has already completed tasks
+            const hasCompleted = await checkIfUserCompletedToday(userId);
+            if (hasCompleted) {
+              // Mark as sent without sending
+              await markNotificationSent(userId, type);
+              continue;
+            }
+          }
+          
+          pendingNotifications.push({
+            userId,
+            fcmToken,
+            type,
+            currentDay,
+            scheduleId: scheduleDoc.id
+          });
+        }
+      }
+    }
+    
+    return pendingNotifications;
+    
+  } catch (error) {
+    console.error('Error getting pending notifications:', error);
+    return [];
+  }
+};
+
+// Check if user completed tasks today
+const checkIfUserCompletedToday = async (userId) => {
+  try {
+    const todayCompletion = await getTodayCompletion(userId);
+    return todayCompletion && todayCompletion.allTasksCompleted;
+  } catch (error) {
+    console.error('Error checking user completion:', error);
+    return false;
+  }
+};
+
+// Get users for re-engagement notifications (inactive 2+ days)
+export const getUsersForReengagement = async () => {
+  try {
+    const twoDaysAgo = new Date(getIndiaDate().getTime() - 2 * 24 * 60 * 60 * 1000);
+    const twoDaysAgoTimestamp = Timestamp.fromDate(twoDaysAgo);
+    
+    const usersSnapshot = await getDocs(
+      query(
+        collection(db, 'users'),
+        where('lastCompletedAt', '<=', twoDaysAgoTimestamp),
+        where('role', '!=', 'admin')
+      )
+    );
+    
+    const inactiveUsers = [];
+    
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      const userId = userDoc.id;
+      
+      // Get user's FCM token
+      const userNotificationDoc = await getDoc(doc(db, 'userNotifications', userId));
+      if (userNotificationDoc.exists() && userNotificationDoc.data().fcmToken) {
+        inactiveUsers.push({
+          userId,
+          userData,
+          fcmToken: userNotificationDoc.data().fcmToken
+        });
+      }
+    }
+    
+    return inactiveUsers;
+    
+  } catch (error) {
+    console.error('Error getting users for re-engagement:', error);
+    return [];
+  }
+};
+
+// Create notification content based on type
+export const createNotificationContent = (type, userData = {}, extra = {}) => {
+  const { name = 'Champion', currentDay = 1, streakCount = 0, village = 'Your Village' } = userData;
+  
+  const notifications = {
+    daily_reminder: {
+      title: 'Time for Training!',
+      body: `Good morning ${name}! Day ${currentDay} awaits. Let's build strength!`,
+      data: { type: 'daily_reminder', url: '/' }
+    },
+    
+    evening_check: {
+      title: 'Training Reminder',
+      body: `${name}, 2 hours left to complete Day ${currentDay}. Keep your streak alive!`,
+      data: { type: 'evening_check', url: '/' }
+    },
+    
+    streak_protection: {
+      title: 'Don\'t Break Your Streak!',
+      body: `${name}, your ${streakCount}-day streak is at risk! Complete Day ${currentDay} now.`,
+      data: { type: 'streak_protection', url: '/' }
+    },
+    
+    hydration: {
+      title: 'Stay Hydrated!',
+      body: `Great job completing your morning training ${name}! Time to hydrate and fuel up.`,
+      data: { type: 'hydration', url: '/' }
+    },
+    
+    weekly_progress: {
+      title: 'Weekly Progress Report',
+      body: `${name}, you've completed ${extra.weeklyDays || 0}/7 days this week. Ready for a fresh start?`,
+      data: { type: 'weekly_progress', url: '/' }
+    },
+    
+    reengagement: {
+      title: `Missing You, ${name}!`,
+      body: `${village} needs you back! Your training journey is waiting.`,
+      data: { type: 'reengagement', url: '/' }
+    }
+  };
+  
+  return notifications[type] || notifications.daily_reminder;
+};
+
+// Track notification analytics
+export const trackNotificationAnalytics = async (userId, type, status, extra = {}) => {
+  try {
+    const analyticsData = {
+      userId,
+      type,
+      status, // 'sent', 'delivered', 'clicked', 'dismissed'
+      timestamp: serverTimestamp(),
+      date: getIndiaDate().toISOString().split('T')[0],
+      ...extra
+    };
+    
+    const analyticsRef = doc(collection(db, 'notificationAnalytics'));
+    await setDoc(analyticsRef, analyticsData);
+    
+  } catch (error) {
+    console.error('Error tracking notification analytics:', error);
+  }
+};
+
+// Get notification analytics for admin dashboard
+export const getNotificationAnalytics = async (days = 7) => {
+  try {
+    const startDate = new Date(getIndiaDate().getTime() - days * 24 * 60 * 60 * 1000);
+    const startDateStr = startDate.toISOString().split('T')[0];
+    
+    const analyticsSnapshot = await getDocs(
+      query(
+        collection(db, 'notificationAnalytics'),
+        where('date', '>=', startDateStr),
+        orderBy('date', 'desc')
+      )
+    );
+    
+    const analytics = analyticsSnapshot.docs.map(doc => ({ 
+      id: doc.id, 
+      ...doc.data() 
+    }));
+    
+    // Calculate summary stats
+    const summary = {
+      totalSent: analytics.filter(a => a.status === 'sent').length,
+      totalDelivered: analytics.filter(a => a.status === 'delivered').length,
+      totalClicked: analytics.filter(a => a.status === 'clicked').length,
+      totalDismissed: analytics.filter(a => a.status === 'dismissed').length,
+      clickRate: 0,
+      deliveryRate: 0
+    };
+    
+    if (summary.totalSent > 0) {
+      summary.deliveryRate = ((summary.totalDelivered / summary.totalSent) * 100).toFixed(1);
+    }
+    
+    if (summary.totalDelivered > 0) {
+      summary.clickRate = ((summary.totalClicked / summary.totalDelivered) * 100).toFixed(1);
+    }
+    
+    return { analytics, summary };
+    
+  } catch (error) {
+    console.error('Error getting notification analytics:', error);
+    return { analytics: [], summary: {} };
+  }
+};
+
+// ===== EXISTING USER FUNCTIONS =====
 
 export const getUserData = async (userId) => {
   try {
@@ -401,6 +725,11 @@ export const checkAndUpdateDayCompletion = async (userId, currentDay, totalTasks
         allTasksCompleted: true,
         dayCompletedAt: serverTimestamp()
       });
+      
+      // Check if completed before 10 AM for hydration reminder
+      if (indiaDate.getHours() < 10) {
+        await enableHydrationReminder(userId);
+      }
       
       // Update user progress
       await updateUserDayCompletion(userId, currentDay);
