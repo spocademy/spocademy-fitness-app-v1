@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
     console.log('Starting morning reminder notifications...');
 
-    // Use Firebase REST API to get users
+    // Get all users with notification tokens
     const usersResponse = await fetch(
       `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/users`,
       {
@@ -85,18 +85,34 @@ export default async function handler(req, res) {
       const userName = fields.name ? fields.name.stringValue : 'Champion';
       const currentDay = fields.currentDay ? fields.currentDay.integerValue : '1';
 
-      // Create FCM message
+      // Create FCM message using HTTP v1 format
       const message = {
-        to: fcmToken,
-        notification: {
-          title: 'Time for Training!',
-          body: `Good morning ${userName}! Day ${currentDay} awaits. Let's build strength!`,
-          icon: '/logo192.png'
-        },
-        data: {
-          type: 'daily_reminder',
-          url: '/',
-          userId: userId
+        message: {
+          token: fcmToken,
+          notification: {
+            title: 'Time for Training!',
+            body: `Good morning ${userName}! Day ${currentDay} awaits. Let's build strength!`
+          },
+          data: {
+            type: 'daily_reminder',
+            url: '/',
+            userId: userId
+          },
+          android: {
+            priority: 'high',
+            notification: {
+              sound: 'default',
+              channel_id: 'spocademy_notifications'
+            }
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'default',
+                badge: 1
+              }
+            }
+          }
         }
       };
 
@@ -124,16 +140,19 @@ export default async function handler(req, res) {
       );
     }
 
-    // Send notifications using FCM Legacy API
+    // Get access token for FCM HTTP v1
+    const accessToken = await getFirebaseAccessToken();
+
+    // Send notifications using FCM HTTP v1 API
     let successCount = 0;
     let failureCount = 0;
 
     for (const message of notifications) {
       try {
-        const response = await fetch('https://fcm.googleapis.com/fcm/send', {
+        const response = await fetch(`https://fcm.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/messages:send`, {
           method: 'POST',
           headers: {
-            'Authorization': `key=${process.env.FIREBASE_API_KEY}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(message)
@@ -143,7 +162,8 @@ export default async function handler(req, res) {
           successCount++;
         } else {
           failureCount++;
-          console.error('FCM send failed:', await response.text());
+          const errorText = await response.text();
+          console.error('FCM send failed:', errorText);
         }
       } catch (error) {
         failureCount++;
@@ -169,9 +189,13 @@ export default async function handler(req, res) {
   }
 }
 
-// Get Firebase access token using API key
+// Get Firebase access token using service account key simulation
+async function getFirebaseAccessToken() {
+  // For now, return API key - you'll need proper service account for production
+  return process.env.FIREBASE_API_KEY;
+}
+
+// Get basic access token
 async function getAccessToken() {
-  // For simplicity, we'll use a service account alternative
-  // This is a simplified approach for the demo
   return process.env.FIREBASE_API_KEY;
 }

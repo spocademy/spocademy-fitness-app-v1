@@ -161,25 +161,44 @@ export default async function handler(req, res) {
         level: fields.level ? fields.level.stringValue : ''
       });
 
-      // Create FCM message
+      // Create FCM message using HTTP v1 format
       const fcmMessage = {
-        to: fcmToken,
-        notification: {
-          title: title,
-          body: message,
-          icon: '/logo192.png'
-        },
-        data: {
-          type: 'manual_notification',
-          url: '/',
-          userId: userId
+        message: {
+          token: fcmToken,
+          notification: {
+            title: title,
+            body: message
+          },
+          data: {
+            type: 'manual_notification',
+            url: '/',
+            userId: userId
+          },
+          android: {
+            priority: 'high',
+            notification: {
+              sound: 'default',
+              channel_id: 'spocademy_notifications'
+            }
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'default',
+                badge: 1
+              }
+            }
+          }
         }
       };
 
       notifications.push(fcmMessage);
     }
 
-    // Send notifications using FCM Legacy API
+    // Get access token for FCM HTTP v1
+    const accessToken = await getFirebaseAccessToken();
+
+    // Send notifications using FCM HTTP v1 API
     let successCount = 0;
     let failureCount = 0;
     let deliveryResults = [];
@@ -189,33 +208,34 @@ export default async function handler(req, res) {
       const user = targetedUsers[i];
       
       try {
-        const response = await fetch('https://fcm.googleapis.com/fcm/send', {
+        const response = await fetch(`https://fcm.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/messages:send`, {
           method: 'POST',
           headers: {
-            'Authorization': `key=${process.env.FIREBASE_API_KEY}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(message)
         });
 
-        const result = await response.json();
-        
-        if (response.ok && result.success === 1) {
+        if (response.ok) {
+          const result = await response.json();
           successCount++;
           deliveryResults.push({
             userId: user.userId,
             name: user.name,
             status: 'sent',
-            messageId: result.results?.[0]?.message_id
+            messageId: result.name
           });
         } else {
           failureCount++;
+          const errorText = await response.text();
           deliveryResults.push({
             userId: user.userId,
             name: user.name,
             status: 'failed',
-            error: result.results?.[0]?.error || 'Unknown error'
+            error: errorText
           });
+          console.error('FCM send failed:', errorText);
         }
 
         // Track notification analytics
@@ -274,6 +294,13 @@ export default async function handler(req, res) {
   }
 }
 
+// Get Firebase access token using service account key simulation
+async function getFirebaseAccessToken() {
+  // For now, return API key - you'll need proper service account for production
+  return process.env.FIREBASE_API_KEY;
+}
+
+// Get basic access token
 async function getAccessToken() {
   return process.env.FIREBASE_API_KEY;
 }
