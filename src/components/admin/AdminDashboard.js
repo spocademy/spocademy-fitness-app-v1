@@ -12,7 +12,8 @@ import {
   createWeeklySchedule,
   getAllTasks,
   getAllPlans,
-  getWeeklySchedule
+  getWeeklySchedule,
+  getDailyPlan
 } from '../../services/firebaseService';
 import './AdminDashboard.css';
 
@@ -31,7 +32,6 @@ const AdminDashboard = () => {
   });
   const { logout, currentUser } = useAuth();
 
-  // New user form state
   const [newUser, setNewUser] = useState({
     phone: '',
     name: '',
@@ -41,15 +41,13 @@ const AdminDashboard = () => {
     password: ''
   });
 
-  // New task form state
   const [newTask, setNewTask] = useState({
     nameEn: '',
     nameMr: '',
-    type: 'strength',
+    type: 'athletics',
     exerciseType: ''
   });
 
-  // Daily plan form state
   const [newPlan, setNewPlan] = useState({
     day: 'monday',
     level: 'beginnerBoys',
@@ -58,7 +56,7 @@ const AdminDashboard = () => {
     excludedTasks: []
   });
 
-  // Weekly schedule form state
+  const [selectedDay, setSelectedDay] = useState('monday');
   const [scheduleForm, setScheduleForm] = useState({
     monday: [],
     tuesday: [],
@@ -69,7 +67,6 @@ const AdminDashboard = () => {
     sunday: []
   });
 
-  // Manual notification state
   const [notificationForm, setNotificationForm] = useState({
     title: '',
     message: '',
@@ -83,8 +80,9 @@ const AdminDashboard = () => {
   const [notificationResult, setNotificationResult] = useState(null);
   const [sendingNotification, setSendingNotification] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicatePlanData, setDuplicatePlanData] = useState(null);
 
-  // Exercise options
   const exerciseOptions = {
     squats: { en: 'Squats', mr: 'स्क्वॅट्स' },
     jumpingJacks: { en: 'Jumping Jacks', mr: 'जंपिंग जॅक्स' },
@@ -93,7 +91,6 @@ const AdminDashboard = () => {
     situps: { en: 'Sit-ups', mr: 'सिट-अप्स' }
   };
 
-  // Fetch data on component mount
   useEffect(() => {
     fetchAllData();
   }, []);
@@ -115,7 +112,6 @@ const AdminDashboard = () => {
       setPlans(plansData);
       setWeeklySchedule(scheduleData);
       
-      // Initialize schedule form with existing data
       if (scheduleData) {
         setScheduleForm({
           monday: scheduleData.monday || [],
@@ -134,7 +130,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // Get unique villages and levels for notification targeting
   const getUniqueVillages = () => {
     const villages = [...new Set(users.map(user => user.village).filter(Boolean))];
     return villages.sort();
@@ -144,19 +139,15 @@ const AdminDashboard = () => {
     return ['beginnerBoys', 'beginnerGirls', 'advancedBoys', 'advancedGirls', 'specialBatch'];
   };
 
-  // Handle notification form changes
   const handleNotificationFormChange = (field, value) => {
     setNotificationForm(prev => ({
       ...prev,
       [field]: value
     }));
-    
-    // Clear preview when form changes
     setPreviewData(null);
     setNotificationResult(null);
   };
 
-  // Handle multi-select for villages and levels
   const handleMultiSelect = (field, value, checked) => {
     setNotificationForm(prev => ({
       ...prev,
@@ -167,7 +158,6 @@ const AdminDashboard = () => {
     setPreviewData(null);
   };
 
-  // Validate notification form
   const validateNotificationForm = () => {
     const errors = [];
     if (!notificationForm.title || notificationForm.title.trim().length < 3) {
@@ -188,7 +178,6 @@ const AdminDashboard = () => {
     return errors;
   };
 
-  // Preview notification targeting
   const handlePreviewNotification = () => {
     const errors = validateNotificationForm();
     if (errors.length > 0) {
@@ -196,7 +185,6 @@ const AdminDashboard = () => {
       return;
     }
 
-    // Calculate targeted users
     let targetedUsers = users.filter(user => user.role !== 'admin');
     let targetedCount = 0;
 
@@ -207,21 +195,18 @@ const AdminDashboard = () => {
     targetedUsers.forEach(user => {
       let shouldInclude = false;
       
-      // Village filtering
       if (villages.length > 0) {
         shouldInclude = villages.some(village => 
           user.village && user.village.toLowerCase().includes(village.toLowerCase())
         );
       }
       
-      // Level filtering
       if (levels.length > 0) {
         if (shouldInclude || villages.length === 0) {
           shouldInclude = levels.includes(user.level);
         }
       }
       
-      // Activity status filtering
       if (activityStatus.includes('all') || (villages.length === 0 && levels.length === 0)) {
         shouldInclude = true;
       } else if (activityStatus.includes('inactive_2_days') || activityStatus.includes('inactive_7_days')) {
@@ -239,14 +224,13 @@ const AdminDashboard = () => {
 
     setPreviewData({
       targetedCount,
-      totalUsers: users.length - 1, // Exclude admin
+      totalUsers: users.length - 1,
       villages: villages.length > 0 ? villages : ['All'],
       levels: levels.length > 0 ? levels : ['All'],
       activityStatus
     });
   };
 
-  // Send manual notification
   const handleSendNotification = async () => {
     const errors = validateNotificationForm();
     if (errors.length > 0) {
@@ -282,7 +266,6 @@ const AdminDashboard = () => {
           ...result
         });
         
-        // Clear form on successful send
         if (notificationForm.scheduleType === 'now') {
           setNotificationForm({
             title: '',
@@ -312,7 +295,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // Clear notification result
   const clearNotificationResult = () => {
     setNotificationResult(null);
   };
@@ -389,7 +371,6 @@ const AdminDashboard = () => {
         type: newTask.type
       };
 
-      // Add exercise type for strength tasks only
       if (newTask.type === 'strength') {
         taskData.exerciseType = newTask.exerciseType;
       }
@@ -400,7 +381,7 @@ const AdminDashboard = () => {
       setNewTask({
         nameEn: '',
         nameMr: '',
-        type: 'strength',
+        type: 'athletics',
         exerciseType: ''
       });
       
@@ -414,20 +395,35 @@ const AdminDashboard = () => {
     }
   };
 
-  // CONSOLIDATED PLAN CREATION FUNCTION
-  const handleCreateConsolidatedPlan = async () => {
+  const handleDuplicatePlanConfirm = async (replace) => {
+    if (replace && duplicatePlanData) {
+      await createConsolidatedPlanInternal(duplicatePlanData, true);
+    }
+    setShowDuplicateModal(false);
+    setDuplicatePlanData(null);
+  };
+
+  const createConsolidatedPlanInternal = async (planData, skipCheck = false) => {
     try {
       setLoading(true);
       
-      if (!weeklySchedule || !weeklySchedule[newPlan.day]) {
+      if (!weeklySchedule || !weeklySchedule[planData.day]) {
         alert('No tasks assigned to this day yet. Please set up the weekly schedule first.');
         return;
       }
       
-      const tasksForDay = weeklySchedule[newPlan.day];
-      const excludedTasks = newPlan.excludedTasks || [];
+      if (!skipCheck) {
+        const existingPlan = await getDailyPlan(planData.day, planData.week, planData.level);
+        if (existingPlan) {
+          setDuplicatePlanData(planData);
+          setShowDuplicateModal(true);
+          return;
+        }
+      }
       
-      // Filter out excluded tasks
+      const tasksForDay = weeklySchedule[planData.day];
+      const excludedTasks = planData.excludedTasks || [];
+      
       const includedTasks = tasksForDay.filter(taskId => !excludedTasks.includes(taskId));
       
       if (includedTasks.length === 0) {
@@ -435,33 +431,29 @@ const AdminDashboard = () => {
         return;
       }
       
-      // Prepare consolidated tasks data
       const consolidatedTasks = [];
       
       for (const taskId of includedTasks) {
         const task = tasks.find(t => t.id === taskId);
-        const taskPlan = newPlan.taskPlans?.[taskId];
+        const taskPlan = planData.taskPlans?.[taskId];
         
         let taskData = {
           taskId: taskId
         };
         
-        // Only add reps/sets/restTime for non-nutrition tasks
         if (task && task.type !== 'nutrition') {
-          taskData.reps = taskPlan?.reps || 5;
-          taskData.sets = taskPlan?.sets || 2;
-          taskData.restTime = taskPlan?.restTime || 30;
+          taskData.reps = taskPlan?.reps && taskPlan.reps > 0 ? taskPlan.reps : 5;
+          taskData.sets = taskPlan?.sets && taskPlan.sets > 0 ? taskPlan.sets : 2;
+          taskData.restTime = taskPlan?.restTime && taskPlan.restTime >= 0 ? taskPlan.restTime : 30;
         }
         
         consolidatedTasks.push(taskData);
       }
       
-      // Create one consolidated plan
-      const planId = await createDailyPlan(newPlan.day, newPlan.week, newPlan.level, consolidatedTasks);
+      const planId = await createDailyPlan(planData.day, planData.week, planData.level, consolidatedTasks);
       
-      alert(`Consolidated plan created: ${planId} for ${newPlan.day} Week ${newPlan.week} ${newPlan.level}!\nIncluded ${consolidatedTasks.length} tasks.`);
+      alert(`Consolidated plan ${skipCheck ? 'replaced' : 'created'}: ${planId} for ${planData.day} Week ${planData.week} ${planData.level}!\nIncluded ${consolidatedTasks.length} tasks.`);
       
-      // Reset task plans and exclusions for next entry
       setNewPlan({
         ...newPlan,
         taskPlans: {},
@@ -476,6 +468,10 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCreateConsolidatedPlan = async () => {
+    await createConsolidatedPlanInternal(newPlan, false);
   };
 
   const handleUpdateSchedule = async (e) => {
@@ -497,19 +493,67 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleScheduleTaskToggle = (day, taskId) => {
-    const currentTasks = scheduleForm[day] || [];
-    const isSelected = currentTasks.includes(taskId);
+  const handleDragStart = (e, taskId) => {
+    e.dataTransfer.setData('text/plain', taskId);
+    e.target.classList.add('dragging');
+  };
+
+  const handleDragEnd = (e) => {
+    e.target.classList.remove('dragging');
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over-zone');
+  };
+
+  const handleDragLeave = (e) => {
+    e.currentTarget.classList.remove('drag-over-zone');
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over-zone');
     
-    if (isSelected) {
+    const taskId = e.dataTransfer.getData('text/plain');
+    const currentTasks = scheduleForm[selectedDay] || [];
+    
+    if (!currentTasks.includes(taskId)) {
       setScheduleForm({
         ...scheduleForm,
-        [day]: currentTasks.filter(id => id !== taskId)
+        [selectedDay]: [...currentTasks, taskId]
       });
-    } else {
+    }
+  };
+
+  const handleRemoveTaskFromDay = (taskId) => {
+    const currentTasks = scheduleForm[selectedDay] || [];
+    setScheduleForm({
+      ...scheduleForm,
+      [selectedDay]: currentTasks.filter(id => id !== taskId)
+    });
+  };
+
+  const moveTaskUp = (taskId) => {
+    const currentTasks = [...(scheduleForm[selectedDay] || [])];
+    const index = currentTasks.indexOf(taskId);
+    if (index > 0) {
+      [currentTasks[index], currentTasks[index - 1]] = [currentTasks[index - 1], currentTasks[index]];
       setScheduleForm({
         ...scheduleForm,
-        [day]: [...currentTasks, taskId]
+        [selectedDay]: currentTasks
+      });
+    }
+  };
+
+  const moveTaskDown = (taskId) => {
+    const currentTasks = [...(scheduleForm[selectedDay] || [])];
+    const index = currentTasks.indexOf(taskId);
+    if (index < currentTasks.length - 1) {
+      [currentTasks[index], currentTasks[index + 1]] = [currentTasks[index + 1], currentTasks[index]];
+      setScheduleForm({
+        ...scheduleForm,
+        [selectedDay]: currentTasks
       });
     }
   };
@@ -531,12 +575,49 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleTaskPlanChange = (taskId, field, value) => {
+    const numericValue = value === '' ? '' : parseInt(value.replace(/\D/g, '')) || '';
+    
+    setNewPlan({
+      ...newPlan,
+      taskPlans: {
+        ...newPlan.taskPlans,
+        [taskId]: {
+          ...newPlan.taskPlans?.[taskId],
+          [field]: numericValue
+        }
+      }
+    });
+  };
+
   const handleLogout = async () => {
     try {
       await logout();
     } catch (error) {
       console.error('Logout error:', error);
     }
+  };
+
+  const sortTasksByCategory = (tasksToSort) => {
+    return tasksToSort.sort((a, b) => {
+      const order = { athletics: 1, strength: 2, nutrition: 3 };
+      return (order[a.type] || 999) - (order[b.type] || 999);
+    });
+  };
+
+  const sortPlans = (plansToSort) => {
+    const dayOrder = { monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 7 };
+    const levelOrder = { beginnerBoys: 1, beginnerGirls: 2, advancedBoys: 3, advancedGirls: 4, specialBatch: 5 };
+    
+    return plansToSort.sort((a, b) => {
+      const dayDiff = (dayOrder[a.day] || 999) - (dayOrder[b.day] || 999);
+      if (dayDiff !== 0) return dayDiff;
+      
+      const levelDiff = (levelOrder[a.level] || 999) - (levelOrder[b.level] || 999);
+      if (levelDiff !== 0) return levelDiff;
+      
+      return (a.week || 999) - (b.week || 999);
+    });
   };
 
   return (
@@ -553,42 +634,15 @@ const AdminDashboard = () => {
 
       <div className="admin-nav">
         <div className="nav-tabs">
-          <button 
-            className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            Dashboard
-          </button>
-          <button 
-            className={`nav-tab ${activeTab === 'users' ? 'active' : ''}`}
-            onClick={() => setActiveTab('users')}
-          >
-            Users
-          </button>
-          <button 
-            className={`nav-tab ${activeTab === 'tasks' ? 'active' : ''}`}
-            onClick={() => setActiveTab('tasks')}
-          >
-            Tasks
-          </button>
-          <button 
-            className={`nav-tab ${activeTab === 'plans' ? 'active' : ''}`}
-            onClick={() => setActiveTab('plans')}
-          >
-            Plans
-          </button>
-          <button 
-            className={`nav-tab ${activeTab === 'schedule' ? 'active' : ''}`}
-            onClick={() => setActiveTab('schedule')}
-          >
-            Schedule
-          </button>
-          <button 
-            className={`nav-tab ${activeTab === 'notifications' ? 'active' : ''}`}
-            onClick={() => setActiveTab('notifications')}
-          >
-            Notifications
-          </button>
+          {['dashboard', 'users', 'tasks', 'plans', 'schedule', 'notifications'].map(tab => (
+            <button 
+              key={tab}
+              className={`nav-tab ${activeTab === tab ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -638,240 +692,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {activeTab === 'notifications' && (
-          <div className="notifications-tab">
-            <div className="form-section">
-              <h3>Send Manual Notification</h3>
-              
-              {/* Title and Message */}
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Title</label>
-                  <input
-                    type="text"
-                    placeholder="Training Update"
-                    value={notificationForm.title}
-                    onChange={(e) => handleNotificationFormChange('title', e.target.value)}
-                    maxLength="50"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Message</label>
-                  <textarea
-                    placeholder="New workout plans are now available for all levels"
-                    value={notificationForm.message}
-                    onChange={(e) => handleNotificationFormChange('message', e.target.value)}
-                    maxLength="200"
-                    style={{ minHeight: '80px', resize: 'vertical' }}
-                  />
-                </div>
-              </div>
-
-              {/* Village Targeting */}
-              <div className="form-group">
-                <label>Target Villages (leave empty for all)</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '8px' }}>
-                  {getUniqueVillages().map(village => (
-                    <label key={village} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={notificationForm.villages.includes(village)}
-                        onChange={(e) => handleMultiSelect('villages', village, e.target.checked)}
-                        style={{ marginRight: '6px' }}
-                      />
-                      <span>{village}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Level Targeting */}
-              <div className="form-group">
-                <label>Target Levels (leave empty for all)</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '8px' }}>
-                  {getUniqueLevels().map(level => (
-                    <label key={level} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={notificationForm.levels.includes(level)}
-                        onChange={(e) => handleMultiSelect('levels', level, e.target.checked)}
-                        style={{ marginRight: '6px' }}
-                      />
-                      <span>{level}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Activity Targeting */}
-              <div className="form-group">
-                <label>Activity Status</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '8px' }}>
-                  {[
-                    { key: 'all', label: 'All Users' },
-                    { key: 'inactive_2_days', label: 'Inactive 2+ Days' },
-                    { key: 'inactive_7_days', label: 'Inactive 7+ Days' }
-                  ].map(status => (
-                    <label key={status.key} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={notificationForm.activityStatus.includes(status.key)}
-                        onChange={(e) => handleMultiSelect('activityStatus', status.key, e.target.checked)}
-                        style={{ marginRight: '6px' }}
-                      />
-                      <span>{status.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Scheduling */}
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Send Time</label>
-                  <select
-                    value={notificationForm.scheduleType}
-                    onChange={(e) => handleNotificationFormChange('scheduleType', e.target.value)}
-                  >
-                    <option value="now">Send Now</option>
-                    <option value="scheduled">Schedule for Later</option>
-                  </select>
-                </div>
-                {notificationForm.scheduleType === 'scheduled' && (
-                  <div className="form-group">
-                    <label>Date & Time</label>
-                    <input
-                      type="datetime-local"
-                      value={notificationForm.scheduledDateTime}
-                      onChange={(e) => handleNotificationFormChange('scheduledDateTime', e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                <button 
-                  onClick={handlePreviewNotification} 
-                  className="btn btn-secondary"
-                  disabled={loading}
-                >
-                  Preview Targeting
-                </button>
-                <button 
-                  onClick={handleSendNotification} 
-                  className="btn btn-primary"
-                  disabled={sendingNotification || !previewData}
-                >
-                  {sendingNotification ? 'Sending...' : 
-                   notificationForm.scheduleType === 'scheduled' ? 'Schedule Notification' : 'Send Now'}
-                </button>
-                {notificationResult && (
-                  <button 
-                    onClick={clearNotificationResult} 
-                    className="btn btn-secondary"
-                  >
-                    Clear Results
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Preview Results */}
-            {previewData && (
-              <div className="form-section" style={{ background: '#f0f8ff' }}>
-                <h3>Notification Preview</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                  <div>
-                    <strong>Targeted Users:</strong> {previewData.targetedCount} / {previewData.totalUsers}
-                  </div>
-                  <div>
-                    <strong>Villages:</strong> {previewData.villages.join(', ')}
-                  </div>
-                  <div>
-                    <strong>Levels:</strong> {previewData.levels.join(', ')}
-                  </div>
-                  <div>
-                    <strong>Activity:</strong> {previewData.activityStatus.join(', ')}
-                  </div>
-                </div>
-                <div style={{ marginTop: '12px', padding: '12px', background: 'white', borderRadius: '8px' }}>
-                  <strong>Preview:</strong><br />
-                  <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '4px' }}>
-                    {notificationForm.title}
-                  </div>
-                  <div style={{ color: '#666' }}>
-                    {notificationForm.message}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Send Results */}
-            {notificationResult && (
-              <div className="form-section" style={{ 
-                background: notificationResult.success ? '#f0fff4' : '#fef2f2' 
-              }}>
-                <h3>{notificationResult.success ? 'Notification Sent Successfully!' : 'Send Failed'}</h3>
-                
-                {notificationResult.success ? (
-                  <div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-                      <div>
-                        <strong>Total Sent:</strong> {notificationResult.sent || 0}
-                      </div>
-                      <div>
-                        <strong>Failed:</strong> {notificationResult.failed || 0}
-                      </div>
-                      <div>
-                        <strong>Success Rate:</strong> {
-                          notificationResult.total > 0 
-                            ? Math.round((notificationResult.sent / notificationResult.total) * 100) 
-                            : 0
-                        }%
-                      </div>
-                      {notificationResult.scheduled && (
-                        <div>
-                          <strong>Status:</strong> Scheduled
-                        </div>
-                      )}
-                    </div>
-                    
-                    {notificationResult.deliveryResults && notificationResult.deliveryResults.length > 0 && (
-                      <div>
-                        <h4>Delivery Details:</h4>
-                        <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
-                          {notificationResult.deliveryResults.map((result, index) => (
-                            <div key={index} style={{ 
-                              padding: '8px 12px', 
-                              borderBottom: '1px solid #eee',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              backgroundColor: result.status === 'sent' ? '#f9f9f9' : '#fff5f5'
-                            }}>
-                              <span>{result.name}</span>
-                              <span style={{ 
-                                color: result.status === 'sent' ? '#10b981' : '#ef4444',
-                                fontWeight: '600'
-                              }}>
-                                {result.status === 'sent' ? '✓ Sent' : '✗ Failed'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ color: '#ef4444' }}>
-                    <strong>Error:</strong> {notificationResult.error}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {activeTab === 'users' && (
           <div className="users-tab">
             <div className="form-section">
@@ -881,7 +701,7 @@ const AdminDashboard = () => {
                   <div className="form-group">
                     <label>Phone Number</label>
                     <input
-                      type="tel"
+                      type="text"
                       placeholder="9876543210"
                       value={newUser.phone}
                       onChange={(e) => setNewUser({
@@ -1020,8 +840,8 @@ const AdminDashboard = () => {
                       value={newTask.type}
                       onChange={(e) => setNewTask({...newTask, type: e.target.value, exerciseType: ''})}
                     >
-                      <option value="strength">Strength</option>
                       <option value="athletics">Athletics</option>
+                      <option value="strength">Strength</option>
                       <option value="nutrition">Nutrition</option>
                     </select>
                   </div>
@@ -1050,16 +870,22 @@ const AdminDashboard = () => {
 
             <div className="data-table">
               <div className="table-header">
-                <div className="table-title">All Tasks ({tasks.length})</div>
+                <div className="table-title">All Tasks ({tasks.length}) - Sorted by Category</div>
               </div>
-              {tasks.map(task => (
+              {sortTasksByCategory(tasks).map(task => (
                 <div key={task.id} className="table-row">
                   <div>
                     <strong>{task.name?.en || 'Unnamed Task'}</strong>
                     <br />
                     <small>{task.name?.mr}</small>
                   </div>
-                  <div>{task.type}</div>
+                  <div style={{ 
+                    textTransform: 'capitalize',
+                    color: task.type === 'athletics' ? '#007fff' : 
+                          task.type === 'strength' ? '#28a745' : '#fd7e14'
+                  }}>
+                    {task.type}
+                  </div>
                   <div>{task.exerciseType || '-'}</div>
                   <div>ID: {task.id}</div>
                 </div>
@@ -1068,9 +894,121 @@ const AdminDashboard = () => {
           </div>
         )}
 
+        {activeTab === 'schedule' && (
+          <div className="schedule-tab">
+            <div className="day-schedule-section">
+              <h3>Daily Schedule Management</h3>
+              
+              <div className="day-dropdown">
+                <label>Select Day:</label>
+                <select
+                  value={selectedDay}
+                  onChange={(e) => setSelectedDay(e.target.value)}
+                >
+                  <option value="monday">Monday</option>
+                  <option value="tuesday">Tuesday</option>
+                  <option value="wednesday">Wednesday</option>
+                  <option value="thursday">Thursday</option>
+                  <option value="friday">Friday</option>
+                  <option value="saturday">Saturday</option>
+                  <option value="sunday">Sunday</option>
+                </select>
+              </div>
+
+              <div className="tasks-for-day">
+                <h4>Tasks for {selectedDay.charAt(0).toUpperCase() + selectedDay.slice(1)}</h4>
+                
+                <div 
+                  className="task-list-container"
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  {scheduleForm[selectedDay]?.length > 0 ? (
+                    scheduleForm[selectedDay].map((taskId, index) => {
+                      const task = tasks.find(t => t.id === taskId);
+                      if (!task) return null;
+                      
+                      return (
+                        <div key={taskId} className="task-item">
+                          <div className="task-info">
+                            <div className="task-name">{task.name?.en || 'Unknown Task'}</div>
+                            <div className="task-type">{task.type}</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <button 
+                              onClick={() => moveTaskUp(taskId)}
+                              disabled={index === 0}
+                              className="btn btn-secondary"
+                              style={{ padding: '4px 8px', fontSize: '12px' }}
+                            >
+                              ↑
+                            </button>
+                            <button 
+                              onClick={() => moveTaskDown(taskId)}
+                              disabled={index === scheduleForm[selectedDay].length - 1}
+                              className="btn btn-secondary"
+                              style={{ padding: '4px 8px', fontSize: '12px' }}
+                            >
+                              ↓
+                            </button>
+                            <button 
+                              onClick={() => handleRemoveTaskFromDay(taskId)}
+                              className="btn btn-warning"
+                              style={{ padding: '4px 8px', fontSize: '12px' }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-state-icon">📋</div>
+                      <div className="empty-state-text">No tasks assigned to {selectedDay}</div>
+                      <div className="empty-state-subtext">Drag tasks from below to add them</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="available-tasks">
+                <h4>Available Tasks (drag to add)</h4>
+                <div className="available-tasks-grid">
+                  {sortTasksByCategory(tasks).map(task => (
+                    <div
+                      key={task.id}
+                      className="available-task-item"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, task.id)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <div className="task-info">
+                        <div className="task-name">{task.name?.en || 'Unknown Task'}</div>
+                        <div className="task-type">{task.type}</div>
+                      </div>
+                      <div className="drag-handle">⋮⋮</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button 
+                onClick={handleUpdateSchedule} 
+                className="btn btn-success" 
+                disabled={loading}
+                style={{ marginTop: '24px' }}
+              >
+                {loading ? 'Updating...' : 'Save Schedule'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'plans' && (
           <div className="plans-tab">
-            <div className="form-section">
+            <div className="plan-creation-section">
               <h3>Create Consolidated Daily Plan</h3>
               <div className="form-row">
                 <div className="form-group">
@@ -1092,7 +1030,7 @@ const AdminDashboard = () => {
                   <label>Week Number</label>
                   <select
                     value={newPlan.week}
-                    onChange={(e) => setNewPlan({...newPlan, week: e.target.value})}
+                    onChange={(e) => setNewPlan({...newPlan, week: parseInt(e.target.value)})}
                   >
                     {[1,2,3,4,5,6,7,8,9,10].map(week => (
                       <option key={week} value={week}>Week {week}</option>
@@ -1116,126 +1054,147 @@ const AdminDashboard = () => {
               
               {weeklySchedule && weeklySchedule[newPlan.day] && (
                 <div style={{marginTop: '20px'}}>
-                  <h4>Tasks for {newPlan.day.charAt(0).toUpperCase() + newPlan.day.slice(1)}:</h4>
-                  <p style={{color: '#666', marginBottom: '15px'}}>
-                    This will create ONE consolidated plan (ID: {newPlan.day.slice(0,3)}W{newPlan.week}{newPlan.level.slice(0,2).toUpperCase()}) containing selected tasks below:
+                  <h4>Tasks Schedule for {newPlan.day.charAt(0).toUpperCase() + newPlan.day.slice(1)}:</h4>
+                  <p style={{color: '#666', marginBottom: '15px', fontSize: '14px'}}>
+                    Plan ID: <strong>{newPlan.day.slice(0,3)}W{newPlan.week}{newPlan.level.slice(0,2).toUpperCase()}</strong> | 
+                    Tasks will appear to users in this exact order:
                   </p>
-                  {weeklySchedule[newPlan.day].map(taskId => {
-                    const task = tasks.find(t => t.id === taskId);
-                    if (!task) return null;
-                    
-                    // Check if task is excluded for this plan
-                    const isExcluded = newPlan.excludedTasks && newPlan.excludedTasks.includes(taskId);
-                    
-                    return (
-                      <div key={taskId} style={{
-                        border: isExcluded ? '1px solid #ef4444' : '1px solid #ddd',
-                        padding: '15px',
-                        marginBottom: '10px',
-                        borderRadius: '8px',
-                        backgroundColor: isExcluded ? '#fef2f2' : 'white',
-                        opacity: isExcluded ? 0.6 : 1
-                      }}>
-                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px'}}>
-                          <h5 style={{margin: 0}}>{task.name?.en} ({task.type})</h5>
-                          <button
-                            onClick={() => toggleTaskExclusion(taskId)}
-                            style={{
-                              background: isExcluded ? '#10b981' : '#ef4444',
-                              color: 'white',
-                              border: 'none',
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              cursor: 'pointer',
-                              fontWeight: '600'
-                            }}
-                          >
-                            {isExcluded ? 'Include' : 'Exclude'}
-                          </button>
+                  
+                  <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', marginBottom: '20px' }}>
+                    <h5 style={{ margin: '0 0 12px 0', color: '#007fff' }}>All Scheduled Tasks (in user order):</h5>
+                    {weeklySchedule[newPlan.day].map((taskId, index) => {
+                      const task = tasks.find(t => t.id === taskId);
+                      if (!task) return null;
+                      
+                      const hasCamera = task.exerciseType && (task.exerciseType === 'squats' || task.exerciseType === 'jumpingJacks');
+                      
+                      return (
+                        <div key={taskId} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          margin: '4px 0',
+                          background: 'white',
+                          borderRadius: '6px',
+                          border: '1px solid #e9ecef'
+                        }}>
+                          <span style={{ 
+                            background: task.type === 'athletics' ? '#007fff' : 
+                                       task.type === 'strength' ? '#28a745' : '#fd7e14',
+                            color: 'white',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            marginRight: '12px',
+                            minWidth: '60px',
+                            textAlign: 'center'
+                          }}>
+                            {task.type.toUpperCase()}
+                          </span>
+                          <span style={{ flex: 1, fontWeight: '500' }}>
+                            {index + 1}. {task.name?.en}
+                          </span>
+                          {hasCamera && (
+                            <span style={{ 
+                              background: '#17a2b8', 
+                              color: 'white', 
+                              padding: '2px 6px', 
+                              borderRadius: '8px', 
+                              fontSize: '10px',
+                              marginLeft: '8px'
+                            }}>
+                              📹 CAMERA
+                            </span>
+                          )}
                         </div>
-                        
-                        {!isExcluded && task.type !== 'nutrition' && (
-                          <div className="form-row">
-                            <div className="form-group">
-                              <label>Reps</label>
-                              <input
-                                type="number"
-                                value={newPlan.taskPlans?.[taskId]?.reps || 5}
-                                onChange={(e) => setNewPlan({
-                                  ...newPlan,
-                                  taskPlans: {
-                                    ...newPlan.taskPlans,
-                                    [taskId]: {
-                                      ...newPlan.taskPlans?.[taskId],
-                                      reps: parseInt(e.target.value)
-                                    }
-                                  }
-                                })}
-                                min="1"
-                                max="50"
-                              />
-                            </div>
-                            <div className="form-group">
-                              <label>Sets</label>
-                              <input
-                                type="number"
-                                value={newPlan.taskPlans?.[taskId]?.sets || 2}
-                                onChange={(e) => setNewPlan({
-                                  ...newPlan,
-                                  taskPlans: {
-                                    ...newPlan.taskPlans,
-                                    [taskId]: {
-                                      ...newPlan.taskPlans?.[taskId],
-                                      sets: parseInt(e.target.value)
-                                    }
-                                  }
-                                })}
-                                min="1"
-                                max="10"
-                              />
-                            </div>
-                            <div className="form-group">
-                              <label>Rest Time (seconds)</label>
-                              <input
-                                type="number"
-                                value={newPlan.taskPlans?.[taskId]?.restTime || 30}
-                                onChange={(e) => setNewPlan({
-                                  ...newPlan,
-                                  taskPlans: {
-                                    ...newPlan.taskPlans,
-                                    [taskId]: {
-                                      ...newPlan.taskPlans?.[taskId],
-                                      restTime: parseInt(e.target.value)
-                                    }
-                                  }
-                                })}
-                                min="0"
-                                max="300"
-                              />
-                            </div>
+                      );
+                    })}
+                  </div>
+                  
+                  <h4>Configure Task Settings:</h4>
+                  <div className="task-config-grid">
+                    {weeklySchedule[newPlan.day].map(taskId => {
+                      const task = tasks.find(t => t.id === taskId);
+                      if (!task) return null;
+                      
+                      const isExcluded = newPlan.excludedTasks && newPlan.excludedTasks.includes(taskId);
+                      
+                      return (
+                        <div key={taskId} className="task-config-item" style={{
+                          opacity: isExcluded ? 0.6 : 1,
+                          background: isExcluded ? '#fef2f2' : 'white'
+                        }}>
+                          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px'}}>
+                            <h5 style={{margin: 0}}>{task.name?.en} ({task.type})</h5>
+                            <button
+                              onClick={() => toggleTaskExclusion(taskId)}
+                              className={`btn ${isExcluded ? 'btn-success' : 'btn-warning'}`}
+                              style={{ padding: '4px 8px', fontSize: '12px' }}
+                            >
+                              {isExcluded ? 'Include' : 'Exclude'}
+                            </button>
                           </div>
-                        )}
-                        {!isExcluded && task.type === 'nutrition' && (
-                          <p style={{color: '#666', fontStyle: 'italic'}}>
-                            Nutrition tasks don't require reps/sets configuration
-                          </p>
-                        )}
-                        {isExcluded && (
-                          <p style={{color: '#ef4444', fontStyle: 'italic', margin: 0}}>
-                            This task will be excluded from the plan
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
+                          
+                          {!isExcluded && task.type !== 'nutrition' && (
+                            <div className="config-inputs">
+                              <div className="config-input">
+                                <label>Reps</label>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  placeholder="5"
+                                  value={newPlan.taskPlans?.[taskId]?.reps || ''}
+                                  onChange={(e) => handleTaskPlanChange(taskId, 'reps', e.target.value)}
+                                />
+                              </div>
+                              <div className="config-input">
+                                <label>Sets</label>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  placeholder="2"
+                                  value={newPlan.taskPlans?.[taskId]?.sets || ''}
+                                  onChange={(e) => handleTaskPlanChange(taskId, 'sets', e.target.value)}
+                                />
+                              </div>
+                              <div className="config-input">
+                                <label>Rest (sec)</label>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  placeholder="30"
+                                  value={newPlan.taskPlans?.[taskId]?.restTime || ''}
+                                  onChange={(e) => handleTaskPlanChange(taskId, 'restTime', e.target.value)}
+                                />
+                              </div>
+                            </div>
+                          )}
+                          {!isExcluded && task.type === 'nutrition' && (
+                            <p style={{color: '#666', fontStyle: 'italic'}}>
+                              Nutrition tasks don't require reps/sets configuration
+                            </p>
+                          )}
+                          {isExcluded && (
+                            <p style={{color: '#ef4444', fontStyle: 'italic', margin: 0}}>
+                              This task will be excluded from the plan
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                   
                   <button 
                     onClick={handleCreateConsolidatedPlan} 
                     className="btn btn-primary" 
                     disabled={loading}
+                    style={{ marginTop: '20px' }}
                   >
-                    {loading ? 'Creating...' : `Create Consolidated Plan`}
+                    {loading ? 'Creating...' : 'Create Consolidated Plan'}
                   </button>
                 </div>
               )}
@@ -1243,19 +1202,31 @@ const AdminDashboard = () => {
 
             <div className="data-table">
               <div className="table-header">
-                <div className="table-title">All Consolidated Plans ({plans.length})</div>
+                <div className="table-title">All Consolidated Plans ({plans.length}) - Organized by Day & Level</div>
               </div>
-              {plans.map(plan => (
+              {sortPlans(plans).map(plan => (
                 <div key={plan.id} className="table-row">
                   <div>
                     <strong>Plan ID: {plan.id}</strong>
                     <br />
-                    <small>{plan.day} Week {plan.week} - {plan.level}</small>
+                    <small style={{
+                      color: plan.day === 'monday' ? '#007fff' :
+                             plan.day === 'tuesday' ? '#28a745' :
+                             plan.day === 'wednesday' ? '#fd7e14' :
+                             plan.day === 'thursday' ? '#6f42c1' :
+                             plan.day === 'friday' ? '#20c997' :
+                             plan.day === 'saturday' ? '#dc3545' : '#6c757d'
+                    }}>
+                      {plan.day.charAt(0).toUpperCase() + plan.day.slice(1)} Week {plan.week} - {plan.level}
+                    </small>
                   </div>
                   <div>{plan.tasks?.length || 0} tasks</div>
                   <div>1 point per day</div>
-                  <div>
-                    {plan.tasks?.map(t => t.taskId).join(', ') || 'No tasks'}
+                  <div style={{ fontSize: '12px', maxWidth: '200px', overflow: 'hidden' }}>
+                    {plan.tasks?.map(t => {
+                      const task = tasks.find(task => task.id === t.taskId);
+                      return task?.name?.en || t.taskId;
+                    }).join(', ') || 'No tasks'}
                   </div>
                 </div>
               ))}
@@ -1263,66 +1234,205 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {activeTab === 'schedule' && (
-          <div className="schedule-tab">
+        {activeTab === 'notifications' && (
+          <div className="notifications-tab">
             <div className="form-section">
-              <h3>Weekly Schedule</h3>
-              <form onSubmit={handleUpdateSchedule}>
-                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
-                  <div key={day} className="form-group" style={{marginBottom: '20px'}}>
-                    <label style={{textTransform: 'capitalize', fontSize: '16px', fontWeight: 'bold'}}>
-                      {day}
+              <h3>Send Manual Notification</h3>
+              
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Title</label>
+                  <input
+                    type="text"
+                    placeholder="Training Update"
+                    value={notificationForm.title}
+                    onChange={(e) => handleNotificationFormChange('title', e.target.value)}
+                    maxLength="50"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Message</label>
+                  <textarea
+                    placeholder="New workout plans are now available for all levels"
+                    value={notificationForm.message}
+                    onChange={(e) => handleNotificationFormChange('message', e.target.value)}
+                    maxLength="200"
+                    style={{ minHeight: '80px', resize: 'vertical' }}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Target Villages (leave empty for all)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '8px' }}>
+                  {getUniqueVillages().map(village => (
+                    <label key={village} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={notificationForm.villages.includes(village)}
+                        onChange={(e) => handleMultiSelect('villages', village, e.target.checked)}
+                        style={{ marginRight: '6px' }}
+                      />
+                      <span>{village}</span>
                     </label>
-                    <div style={{
-                      border: '1px solid #ddd', 
-                      padding: '10px', 
-                      borderRadius: '8px',
-                      maxHeight: '120px',
-                      overflowY: 'auto'
-                    }}>
-                      {tasks.map(task => (
-                        <div key={task.id} style={{marginBottom: '5px'}}>
-                          <label style={{display: 'flex', alignItems: 'center', cursor: 'pointer'}}>
-                            <input
-                              type="checkbox"
-                              checked={scheduleForm[day]?.includes(task.id) || false}
-                              onChange={() => handleScheduleTaskToggle(day, task.id)}
-                              style={{marginRight: '10px'}}
-                            />
-                            <span>{task.name?.en} ({task.type})</span>
-                          </label>
-                        </div>
-                      ))}
-                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Target Levels (leave empty for all)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '8px' }}>
+                  {getUniqueLevels().map(level => (
+                    <label key={level} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={notificationForm.levels.includes(level)}
+                        onChange={(e) => handleMultiSelect('levels', level, e.target.checked)}
+                        style={{ marginRight: '6px' }}
+                      />
+                      <span>{level}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Send Time</label>
+                  <select
+                    value={notificationForm.scheduleType}
+                    onChange={(e) => handleNotificationFormChange('scheduleType', e.target.value)}
+                  >
+                    <option value="now">Send Now</option>
+                    <option value="scheduled">Schedule for Later</option>
+                  </select>
+                </div>
+                {notificationForm.scheduleType === 'scheduled' && (
+                  <div className="form-group">
+                    <label>Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={notificationForm.scheduledDateTime}
+                      onChange={(e) => handleNotificationFormChange('scheduledDateTime', e.target.value)}
+                    />
                   </div>
-                ))}
-                <button type="submit" className="btn btn-primary" disabled={loading}>
-                  {loading ? 'Updating...' : 'Update Schedule'}
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                <button 
+                  onClick={handlePreviewNotification} 
+                  className="btn btn-secondary"
+                  disabled={loading}
+                >
+                  Preview Targeting
                 </button>
-              </form>
+                <button 
+                  onClick={handleSendNotification} 
+                  className="btn btn-primary"
+                  disabled={sendingNotification || !previewData}
+                >
+                  {sendingNotification ? 'Sending...' : 
+                   notificationForm.scheduleType === 'scheduled' ? 'Schedule Notification' : 'Send Now'}
+                </button>
+                {notificationResult && (
+                  <button 
+                    onClick={clearNotificationResult} 
+                    className="btn btn-secondary"
+                  >
+                    Clear Results
+                  </button>
+                )}
+              </div>
             </div>
 
-            {weeklySchedule && (
-              <div className="data-table">
-                <div className="table-header">
-                  <div className="table-title">Current Weekly Schedule</div>
+            {previewData && (
+              <div className="form-section" style={{ background: '#f0f8ff' }}>
+                <h3>Notification Preview</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                  <div>
+                    <strong>Targeted Users:</strong> {previewData.targetedCount} / {previewData.totalUsers}
+                  </div>
+                  <div>
+                    <strong>Villages:</strong> {previewData.villages.join(', ')}
+                  </div>
+                  <div>
+                    <strong>Levels:</strong> {previewData.levels.join(', ')}
+                  </div>
                 </div>
-                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
-                  <div key={day} className="table-row">
-                    <div style={{textTransform: 'capitalize', fontWeight: 'bold'}}>{day}</div>
-                    <div>
-                      {weeklySchedule[day]?.map(taskId => {
-                        const task = tasks.find(t => t.id === taskId);
-                        return task ? task.name?.en : taskId;
-                      }).join(', ') || 'No tasks'}
+                <div style={{ marginTop: '12px', padding: '12px', background: 'white', borderRadius: '8px' }}>
+                  <strong>Preview:</strong><br />
+                  <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '4px' }}>
+                    {notificationForm.title}
+                  </div>
+                  <div style={{ color: '#666' }}>
+                    {notificationForm.message}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {notificationResult && (
+              <div className="form-section" style={{ 
+                background: notificationResult.success ? '#f0fff4' : '#fef2f2' 
+              }}>
+                <h3>{notificationResult.success ? 'Notification Sent Successfully!' : 'Send Failed'}</h3>
+                
+                {notificationResult.success ? (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                      <div>
+                        <strong>Total Sent:</strong> {notificationResult.sent || 0}
+                      </div>
+                      <div>
+                        <strong>Failed:</strong> {notificationResult.failed || 0}
+                      </div>
+                      <div>
+                        <strong>Success Rate:</strong> {
+                          notificationResult.total > 0 
+                            ? Math.round((notificationResult.sent / notificationResult.total) * 100) 
+                            : 0
+                        }%
+                      </div>
                     </div>
                   </div>
-                ))}
+                ) : (
+                  <div style={{ color: '#ef4444' }}>
+                    <strong>Error:</strong> {notificationResult.error}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
       </div>
+
+      {showDuplicateModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-title">⚠️ Plan Already Exists</div>
+            <div className="modal-message">
+              A plan for {duplicatePlanData?.day} Week {duplicatePlanData?.week} {duplicatePlanData?.level} already exists.
+              <br /><br />
+              Do you want to replace it with the new configuration?
+            </div>
+            <div className="modal-buttons">
+              <button 
+                className="modal-btn cancel"
+                onClick={() => handleDuplicatePlanConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="modal-btn replace"
+                onClick={() => handleDuplicatePlanConfirm(true)}
+              >
+                Replace Existing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

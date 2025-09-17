@@ -5,6 +5,9 @@
   background: #f8f9fa;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 .admin-header {
@@ -14,6 +17,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-header h1 {
@@ -37,6 +42,7 @@
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .logout-btn:hover {
@@ -47,11 +53,15 @@
   background: #f8f9fa;
   padding: 16px 24px;
   border-bottom: 1px solid #e9ecef;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: auto;
 }
 
 .nav-tabs {
   display: flex;
   gap: 8px;
+  min-width: max-content;
 }
 
 .nav-tab {
@@ -63,6 +73,8 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-tab.active {
@@ -81,6 +93,7 @@
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+  box-sizing: border-box;
 }
 
 /* Stats Row */
@@ -119,6 +132,7 @@
   border: 1px solid #e9ecef;
   overflow: hidden;
   margin-bottom: 24px;
+  width: 100%;
 }
 
 .table-header {
@@ -174,6 +188,7 @@
   color: white;
   font-size: 14px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .user-name {
@@ -202,6 +217,8 @@
   border-radius: 8px;
   border: 1px solid #e9ecef;
   margin-bottom: 24px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .form-section h3 {
@@ -231,19 +248,256 @@
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
   padding: 10px 12px;
   border: 1px solid #e9ecef;
   border-radius: 4px;
   font-size: 14px;
   transition: border-color 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
 }
 
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
   outline: none;
   border-color: #007fff;
   box-shadow: 0 0 0 2px rgba(0, 127, 255, 0.1);
+}
+
+/* Remove number input spinners on all browsers */
+.form-group input[type="number"]::-webkit-outer-spin-button,
+.form-group input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.form-group input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Day Schedule Section */
+.day-schedule-section {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  margin-bottom: 24px;
+}
+
+.day-dropdown {
+  margin-bottom: 20px;
+}
+
+.day-dropdown select {
+  padding: 12px 16px;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  background: white;
+  color: #4d4d4d;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  max-width: 300px;
+}
+
+.day-dropdown select:focus {
+  border-color: #007fff;
+  outline: none;
+}
+
+.tasks-for-day {
+  margin-top: 24px;
+}
+
+.tasks-for-day h4 {
+  color: #007fff;
+  margin-bottom: 16px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.task-list-container {
+  border: 2px dashed #e9ecef;
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 200px;
+  background: #f8f9fa;
+}
+
+.task-item {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  cursor: move;
+  transition: all 0.2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+}
+
+.task-item:hover {
+  border-color: #007fff;
+  box-shadow: 0 2px 8px rgba(0, 127, 255, 0.1);
+}
+
+.task-item.dragging {
+  opacity: 0.5;
+  transform: rotate(5deg);
+}
+
+.task-item.drag-over {
+  border-color: #28a745;
+  background: #f8fff8;
+}
+
+.task-info {
+  flex: 1;
+}
+
+.task-name {
+  font-weight: 600;
+  color: #4d4d4d;
+  margin-bottom: 4px;
+}
+
+.task-type {
+  font-size: 12px;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.drag-handle {
+  color: #6c757d;
+  font-size: 18px;
+  cursor: move;
+  padding: 4px;
+}
+
+.available-tasks {
+  margin-top: 24px;
+}
+
+.available-tasks h4 {
+  color: #6c757d;
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.available-tasks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.available-task-item {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.available-task-item:hover {
+  border-color: #007fff;
+  background: #f0f8ff;
+}
+
+.available-task-item.selected {
+  border-color: #28a745;
+  background: #f8fff8;
+}
+
+.task-checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+/* Plan Creation Section */
+.plan-creation-section {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  margin-bottom: 24px;
+}
+
+.plan-preview {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.plan-preview h4 {
+  color: #007fff;
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.task-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.task-config-item {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.task-config-item h5 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4d4d4d;
+}
+
+.config-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.config-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.config-input label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6c757d;
+}
+
+.config-input input {
+  padding: 8px 10px;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: center;
 }
 
 /* Buttons */
@@ -299,6 +553,87 @@
   background: #e96b00;
 }
 
+.btn-success {
+  background: #28a745;
+  color: white;
+  padding: 12px 24px;
+}
+
+.btn-success:hover {
+  background: #218838;
+}
+
+/* Duplicate Plan Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 32px;
+  border-radius: 12px;
+  max-width: 400px;
+  margin: 20px;
+  text-align: center;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fd7e14;
+  margin-bottom: 16px;
+}
+
+.modal-message {
+  font-size: 16px;
+  color: #4d4d4d;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.modal-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-btn.cancel {
+  background: #6c757d;
+  color: white;
+}
+
+.modal-btn.cancel:hover {
+  background: #5a6268;
+}
+
+.modal-btn.replace {
+  background: #fd7e14;
+  color: white;
+}
+
+.modal-btn.replace:hover {
+  background: #e96b00;
+}
+
 /* Loading Spinner */
 .loading-container {
   display: flex;
@@ -324,8 +659,35 @@
   100% { transform: rotate(360deg); }
 }
 
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6c757d;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state-text {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.empty-state-subtext {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
+  .admin-dashboard {
+    overflow-x: hidden;
+  }
+  
   .admin-content {
     padding: 16px;
   }
@@ -359,12 +721,65 @@
   }
   
   .nav-tabs {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   
   .nav-tab {
     font-size: 12px;
     padding: 10px 16px;
+    flex-shrink: 0;
+  }
+  
+  .config-inputs {
+    grid-template-columns: 1fr;
+  }
+  
+  .task-config-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .available-tasks-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .modal-content {
+    margin: 16px;
+    padding: 24px;
+  }
+  
+  .modal-buttons {
+    flex-direction: column;
+  }
+  
+  .modal-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-header {
+    padding: 16px;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+  
+  .admin-nav {
+    padding: 12px 16px;
+  }
+  
+  .form-section {
+    padding: 16px;
+  }
+  
+  .day-schedule-section {
+    padding: 16px;
+  }
+  
+  .plan-creation-section {
+    padding: 16px;
   }
 }
 
@@ -372,7 +787,28 @@
 .nav-tab:focus,
 .btn:focus,
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.task-item:focus,
+.available-task-item:focus {
   outline: 2px solid rgba(0, 127, 255, 0.5);
   outline-offset: 2px;
+}
+
+/* Drag and drop states */
+.drag-over-zone {
+  border-color: #28a745 !important;
+  background: #f8fff8 !important;
+}
+
+.drag-placeholder {
+  height: 60px;
+  background: #e9ecef;
+  border: 2px dashed #6c757d;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6c757d;
+  font-size: 14px;
 }

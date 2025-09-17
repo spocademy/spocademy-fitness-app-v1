@@ -58,6 +58,7 @@ const DailyPlanPage = ({ day, onBack }) => {
           setShowWhatsAppSupport(true);
           setTasks([]);
         } else {
+          // Keep tasks in the exact order set by admin - NO SORTING
           setTasks(tasksResponse.tasks || []);
           setShowWhatsAppSupport(false);
           
@@ -315,17 +316,6 @@ const DailyPlanPage = ({ day, onBack }) => {
     }
   };
 
-  const uncheckTask = (taskId) => {
-    if (alreadyCompletedToday) return;
-    
-    playSound('click');
-    triggerHapticFeedback('light');
-    
-    const newCompletedTasks = new Set(completedTasks);
-    newCompletedTasks.delete(taskId);
-    setCompletedTasks(newCompletedTasks);
-  };
-
   const completeCurrentExercise = async () => {
     if (currentExercise) {
       await completeTask(currentExercise.id);
@@ -403,7 +393,7 @@ const DailyPlanPage = ({ day, onBack }) => {
     window.open(whatsappUrl, '_blank');
   };
 
-  const renderTaskCard = (task) => {
+  const renderTaskCard = (task, index) => {
     const isCompleted = completedTasks.has(task.id);
     const t = translations[currentLanguage];
     
@@ -419,15 +409,10 @@ const DailyPlanPage = ({ day, onBack }) => {
     
     return (
       <div key={task.id} className={`task-card ${isCompleted ? 'completed' : ''}`}>
-        {isCompleted && !alreadyCompletedToday && (
-          <button className="undo-btn" onClick={() => uncheckTask(task.id)}>
-            {t.undo}
-          </button>
-        )}
         <div className="task-header">
           <div className="task-icon">{task.icon}</div>
           <div className="task-info">
-            <div className="task-name">{taskName}</div>
+            <div className="task-name">{index + 1}. {taskName}</div>
             <div className="task-description">{taskDesc}</div>
           </div>
         </div>
@@ -452,7 +437,6 @@ const DailyPlanPage = ({ day, onBack }) => {
   };
 
   const t = translations[currentLanguage];
-  const categories = ['athletics', 'strength', 'nutrition'];
 
   return (
     <div className="daily-plan-container">
@@ -515,17 +499,10 @@ const DailyPlanPage = ({ day, onBack }) => {
             </button>
           </div>
         ) : (
-          categories.map(category => {
-            const categoryTasks = tasks.filter(task => task.type === category);
-            if (categoryTasks.length === 0) return null;
-            
-            return (
-              <div key={category} className="task-group">
-                <div className="group-title">{t[category]}</div>
-                {categoryTasks.map(task => renderTaskCard(task))}
-              </div>
-            );
-          })
+          // Display all tasks in admin-set order (no grouping by category)
+          <div className="task-group">
+            {tasks.map((task, index) => renderTaskCard(task, index))}
+          </div>
         )}
       </div>
 

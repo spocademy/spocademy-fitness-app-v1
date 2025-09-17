@@ -154,7 +154,7 @@ export default async function handler(req, res) {
         level: fields.level ? fields.level.stringValue : ''
       });
 
-      // Create FCM message using LEGACY format (works with API key)
+      // Create FCM message using LEGACY format
       const fcmMessage = {
         to: fcmToken,
         notification: {
@@ -176,7 +176,7 @@ export default async function handler(req, res) {
     console.log('Targeted users:', targetedUsers.length);
     console.log('Notifications to send:', notifications.length);
 
-    // Send notifications using FCM LEGACY API (works with API key)
+    // Send notifications using FCM LEGACY API with corrected authentication
     let successCount = 0;
     let failureCount = 0;
     let deliveryResults = [];
@@ -186,16 +186,24 @@ export default async function handler(req, res) {
       const user = targetedUsers[i];
       
       try {
+        // Use the FCM_SERVER_KEY environment variable
         const response = await fetch('https://fcm.googleapis.com/fcm/send', {
           method: 'POST',
           headers: {
-            'Authorization': `key=${process.env.FIREBASE_API_KEY}`,
+            'Authorization': `key=${process.env.FCM_SERVER_KEY}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(message)
         });
 
         const result = await response.json();
+        
+        console.log('FCM Response for user', user.name, ':', {
+          status: response.status,
+          success: result.success,
+          failure: result.failure,
+          results: result.results
+        });
 
         if (response.ok && result.success === 1) {
           successCount++;
@@ -207,13 +215,17 @@ export default async function handler(req, res) {
           });
         } else {
           failureCount++;
+          const errorMsg = result.results?.[0]?.error || result.error || 'Unknown error';
           deliveryResults.push({
             userId: user.userId,
             name: user.name,
             status: 'failed',
-            error: result.results?.[0]?.error || 'Unknown error'
+            error: errorMsg
           });
-          console.error('FCM send failed for user:', user.name, result);
+          console.error('FCM send failed for user:', user.name, {
+            error: errorMsg,
+            fullResponse: result
+          });
         }
 
         // Track notification analytics
@@ -259,14 +271,24 @@ export default async function handler(req, res) {
       failed: failureCount,
       total: notifications.length,
       targetedUsers: targetedUsers.length,
-      deliveryResults: deliveryResults
+      deliveryResults: deliveryResults,
+      debug: {
+        totalUsersInDb: users.length,
+        usersWithTokens: Object.keys(userTokens).length,
+        environmentCheck: {
+          hasFirebaseProjectId: !!process.env.FIREBASE_PROJECT_ID,
+          hasFirebaseApiKey: !!process.env.FIREBASE_API_KEY,
+          hasFcmServerKey: !!process.env.FCM_SERVER_KEY
+        }
+      }
     });
 
   } catch (error) {
     console.error('Manual notification error:', error);
     res.status(500).json({ 
       error: 'Internal server error',
-      message: error.message 
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }

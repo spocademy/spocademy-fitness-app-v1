@@ -89,8 +89,7 @@ const Homepage = () => {
     currentDay: userData?.currentDay || 1,
     streak: Math.min(userData?.streakCount || 0, (userData?.currentDay || 1) - 1),
     totalPoints: Math.min(userData?.points || 0, (userData?.currentDay || 1) - 1),
-    village: userData?.village || 'Unknown',
-    district: language === 'mr' ? 'पुणे' : 'Pune'
+    village: userData?.village || 'Unknown'
   };
 
   // Generate path days for display
@@ -185,7 +184,7 @@ const Homepage = () => {
       <div className="homepage-header">
         <div className="header-info">
           <h1>{userStats.name}</h1>
-          <div className="village-info">{userStats.village} {t.village}, {userStats.district}</div>
+          <div className="village-info">{userStats.village}</div>
         </div>
         <button 
           className="lang-toggle"
