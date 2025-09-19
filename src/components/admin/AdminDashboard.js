@@ -83,6 +83,14 @@ const AdminDashboard = () => {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [duplicatePlanData, setDuplicatePlanData] = useState(null);
 
+  // Sorting state
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  
+  // Village management state
+  const [availableVillages, setAvailableVillages] = useState([]);
+  const [showVillageInput, setShowVillageInput] = useState(false);
+  const [newVillage, setNewVillage] = useState('');
+
   const exerciseOptions = {
     squats: { en: 'Squats', mr: 'स्क्वॅट्स' },
     jumpingJacks: { en: 'Jumping Jacks', mr: 'जंपिंग जॅक्स' },
@@ -112,6 +120,10 @@ const AdminDashboard = () => {
       setPlans(plansData);
       setWeeklySchedule(scheduleData);
       
+      // Extract unique villages from users
+      const uniqueVillages = [...new Set(usersData.map(user => user.village).filter(Boolean))].sort();
+      setAvailableVillages(uniqueVillages);
+      
       if (scheduleData) {
         setScheduleForm({
           monday: scheduleData.monday || [],
@@ -128,6 +140,78 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getLastActiveUsers = () => {
+    return users
+      .filter(user => user.lastActive)
+      .sort((a, b) => {
+        const aTime = a.lastActive.seconds ? a.lastActive.seconds : a.lastActive;
+        const bTime = b.lastActive.seconds ? b.lastActive.seconds : b.lastActive;
+        return bTime - aTime;
+      })
+      .slice(0, 5);
+  };
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortedUsers = () => {
+    if (!sortConfig.key) return users;
+
+    return [...users].sort((a, b) => {
+      let aValue = a[sortConfig.key];
+      let bValue = b[sortConfig.key];
+
+      // Handle different data types
+      if (sortConfig.key === 'name' || sortConfig.key === 'village') {
+        aValue = (aValue || '').toLowerCase();
+        bValue = (bValue || '').toLowerCase();
+      } else if (sortConfig.key === 'currentDay' || sortConfig.key === 'streakCount' || sortConfig.key === 'points') {
+        aValue = aValue || 0;
+        bValue = bValue || 0;
+      }
+
+      if (sortConfig.direction === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+  };
+
+  const renderSortableHeader = (label, key) => (
+    <div className="sortable-header" onClick={() => handleSort(key)}>
+      {label}
+      {sortConfig.key === key && (
+        <span className="sort-arrow">
+          {sortConfig.direction === 'asc' ? '▲' : '▼'}
+        </span>
+      )}
+    </div>
+  );
+
+  const handleAddVillage = async () => {
+    if (!newVillage.trim()) {
+      alert('Please enter a village name');
+      return;
+    }
+
+    if (availableVillages.includes(newVillage.trim())) {
+      alert('Village already exists');
+      return;
+    }
+
+    const updatedVillages = [...availableVillages, newVillage.trim()].sort();
+    setAvailableVillages(updatedVillages);
+    setNewUser({ ...newUser, village: newVillage.trim() });
+    setNewVillage('');
+    setShowVillageInput(false);
   };
 
   const getUniqueVillages = () => {
@@ -591,12 +675,15 @@ const AdminDashboard = () => {
   };
 
   const handleLogout = async () => {
+  const confirmLogout = window.confirm('Are you sure you want to logout?');
+  if (confirmLogout) {
     try {
       await logout();
     } catch (error) {
       console.error('Logout error:', error);
     }
-  };
+  }
+};
 
   const sortTasksByCategory = (tasksToSort) => {
     return tasksToSort.sort((a, b) => {
@@ -670,9 +757,9 @@ const AdminDashboard = () => {
 
             <div className="data-table">
               <div className="table-header">
-                <div className="table-title">Recent Users</div>
+                <div className="table-title">Recent Active Users</div>
               </div>
-              {users.slice(0, 5).map(user => (
+              {getLastActiveUsers().map(user => (
                 <div key={user.id} className="table-row">
                   <div className="user-info">
                     <div className="user-avatar">
@@ -725,12 +812,53 @@ const AdminDashboard = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label>Village</label>
-                    <input
-                      type="text"
-                      placeholder="Khed, Pune"
-                      value={newUser.village}
-                      onChange={(e) => setNewUser({...newUser, village: e.target.value})}
-                    />
+                    <div className="village-input-container">
+                      <select
+                        value={newUser.village}
+                        onChange={(e) => setNewUser({...newUser, village: e.target.value})}
+                        style={{ flex: 1 }}
+                      >
+                        <option value="">Select Village</option>
+                        {availableVillages.map(village => (
+                          <option key={village} value={village}>{village}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="village-add-btn"
+                        onClick={() => setShowVillageInput(!showVillageInput)}
+                        title="Add new village"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {showVillageInput && (
+                      <div className="village-input-row">
+                        <input
+                          type="text"
+                          placeholder="Enter new village name"
+                          value={newVillage}
+                          onChange={(e) => setNewVillage(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={handleAddVillage}
+                        >
+                          Add
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => {
+                            setShowVillageInput(false);
+                            setNewVillage('');
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="form-group">
                     <label>User Level</label>
@@ -777,14 +905,14 @@ const AdminDashboard = () => {
                 <div className="table-title">All Users ({users.length})</div>
               </div>
               <div className="table-row header">
-                <div>User</div>
-                <div>Level</div>
-                <div>Day</div>
-                <div>Streak</div>
-                <div>Village</div>
-                <div>Points</div>
+                <div>{renderSortableHeader('User', 'name')}</div>
+                <div>{renderSortableHeader('Level', 'level')}</div>
+                <div>{renderSortableHeader('Day', 'currentDay')}</div>
+                <div>{renderSortableHeader('Streak', 'streakCount')}</div>
+                <div>{renderSortableHeader('Village', 'village')}</div>
+                <div>{renderSortableHeader('Points', 'points')}</div>
               </div>
-              {users.map(user => (
+              {getSortedUsers().map(user => (
                 <div key={user.id} className="table-row">
                   <div className="user-info">
                     <div className="user-avatar">

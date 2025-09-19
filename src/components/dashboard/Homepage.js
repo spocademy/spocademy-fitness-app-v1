@@ -44,7 +44,7 @@ const Homepage = () => {
       profile: 'प्रोफाइल',
       logout: 'लॉगआउट',
       preparingFor: 'तयारी करत आहे',
-      alreadyTrainedToday: 'आज आधीच प्रशिक्षण घेतले',
+      alreadyTrainedToday: 'आज आधीच प्रशिक्षण घेतले आहे',
       comeTomorrowToTrain: 'उद्या येऊन प्रशिक्षण घ्या'
     }
   };
@@ -163,12 +163,15 @@ const Homepage = () => {
   };
 
   const handleLogout = async () => {
+  const confirmLogout = window.confirm('Are you sure you want to logout?');
+  if (confirmLogout) {
     try {
       await logout();
     } catch (error) {
       console.error('Logout error:', error);
     }
-  };
+  }
+};
 
   if (currentView === 'dailyplan') {
     return (

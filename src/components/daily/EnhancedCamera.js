@@ -460,7 +460,7 @@ const EnhancedCamera = ({
           if (currentSetNumber.current >= totalSets) {
             setTimeout(() => {
               setExerciseStatus('EXERCISE COMPLETED!');
-              const exerciseCompleteMessage = currentLanguage === 'mr' ? 'व्यायाम पूर्ण झाला' : 'Exercise completed';
+              const exerciseCompleteMessage = currentLanguage === 'mr' ? 'व्यायाम पूर्ण!' : 'Exercise completed';
               speakMessage(exerciseCompleteMessage);
               setTimeout(() => {
                 cleanup();
@@ -520,7 +520,7 @@ const EnhancedCamera = ({
           if (currentSetNumber.current >= totalSets) {
             setTimeout(() => {
               setExerciseStatus('EXERCISE COMPLETED!');
-              const exerciseCompleteMessage = currentLanguage === 'mr' ? 'व्यायाम पूर्ण झाला' : 'Exercise completed';
+              const exerciseCompleteMessage = currentLanguage === 'mr' ? 'व्यायाम पूर्ण!' : 'Exercise completed';
               speakMessage(exerciseCompleteMessage);
               setTimeout(() => {
                 cleanup();

@@ -88,6 +88,11 @@
   border-color: #fd7e14;
 }
 
+.stat-box.points {
+  background: linear-gradient(135deg, #f0f8ff, #ffffff);
+  border-color: #007fff;
+}
+
 .stat-icon {
   font-size: 28px;
   flex-shrink: 0;
@@ -271,7 +276,7 @@
 }
 
 .status-text.completed-today {
-  background: #0066cc;
+  background: #fcfdfe;
   color: #d63384;
   border: 1px solid #f5c2c7;
 }
@@ -279,11 +284,12 @@
 /* Village Section - Compact */
 .village-section {
   background: white;
-  padding: 16px;
+  padding: 12px;
   border-radius: 12px;
   border: 2px solid #e9ecef;
   width: 100%;
   box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .village-section h3 {
@@ -299,8 +305,10 @@
   gap: 8px;
   max-height: 240px;
   overflow-y: auto;
+  overflow-x: hidden;
   scroll-behavior: smooth;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .rankings-compact::-webkit-scrollbar {
@@ -327,6 +335,40 @@
   padding: 8px 0;
   min-height: 44px;
   width: 100%;
+  overflow: hidden;
+}
+
+.rank {
+  width: 28px;
+  height: 28px;
+  background: #f8f9fa;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.village-name {
+  font-weight: 600;
+  color: #4d4d4d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 38px !important;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.village-points {
+  font-size: 14px;
+  color: #6c757d;
+  font-weight: 500;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .ranking-row.user-village {
@@ -366,14 +408,14 @@
 }
 
 .village-name {
-  flex: 1;
-  font-weight: 600;
+   font-weight: 600;
   color: #4d4d4d;
-  min-width: 0;
-  padding-right: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 120px;
+  margin-right: -10px;
+  display: block;
 }
 
 .village-points {
@@ -381,7 +423,7 @@
   color: #6c757d;
   font-weight: 500;
   flex-shrink: 0;
-  min-width: 60px;
+  min-width: 10px;
   text-align: right;
 }
 
@@ -462,6 +504,11 @@
     height: 70px;
     font-size: 11px;
   }
+
+  .day-card.completed-today .day-circle {
+  background: #007fff;
+  color: white;
+}
   
   .action-button {
     font-size: 10px;
