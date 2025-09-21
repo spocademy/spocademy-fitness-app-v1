@@ -28,7 +28,7 @@ const Homepage = () => {
       profile: 'Profile',
       logout: 'Logout',
       preparingFor: 'Preparing for',
-      alreadyTrainedToday: 'Already Trained Today',
+      alreadyTrainedToday: 'Unlocks tomorrow',
       comeTomorrowToTrain: 'Come Tomorrow'
     },
     mr: {
@@ -44,7 +44,7 @@ const Homepage = () => {
       profile: 'प्रोफाइल',
       logout: 'लॉगआउट',
       preparingFor: 'तयारी करत आहे',
-      alreadyTrainedToday: 'आज आधीच प्रशिक्षण घेतले आहे',
+      alreadyTrainedToday: 'उद्या उपलब्ध होईल',
       comeTomorrowToTrain: 'उद्या येऊन प्रशिक्षण घ्या'
     }
   };
