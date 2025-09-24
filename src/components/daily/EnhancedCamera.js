@@ -29,6 +29,12 @@ const EnhancedCamera = ({
   const currentSetNumber = useRef(1);
   const isDetectionActive = useRef(true);
   
+  // Enhanced detection refs for stricter validation
+  const squatStartTime = useRef(null);
+  const jumpStartTime = useRef(null);
+  const standingKneeAngle = useRef(null);
+  const maxSquatDepth = useRef(null);
+  
   // MediaPipe refs
   const videoRef = useRef();
   const canvasRef = useRef();
@@ -42,6 +48,11 @@ const EnhancedCamera = ({
   const totalSets = exercise?.sets || 2;
   const restTimeFromExercise = exercise?.restTime || 5;
   const currentExercise = exercise?.exerciseType || 'squats';
+
+  // Stricter detection parameters
+  const minSquatHoldTime = 200; // 200ms minimum hold for squats
+  const minJumpHoldTime = 50; // 50ms minimum hold for jumping jacks
+  const minRangeOfMotion = 70; // Minimum 70° range of motion for squats
 
   console.log('Exercise data:', { exercise, currentExercise, repsPerSet, totalSets });
 
@@ -84,6 +95,12 @@ const EnhancedCamera = ({
       currentExerciseCount.current = 0;
       currentSetNumber.current = 1;
       isDetectionActive.current = true;
+      
+      // Reset enhanced detection states
+      squatStartTime.current = null;
+      jumpStartTime.current = null;
+      standingKneeAngle.current = null;
+      maxSquatDepth.current = null;
       
       setExerciseCount(0);
       setCurrentSet(1);
@@ -436,14 +453,62 @@ const EnhancedCamera = ({
       
       const leftKneeAngle = calculateAngle(leftHip, leftKnee, leftAnkle);
       const rightKneeAngle = calculateAngle(rightHip, rightKnee, rightAnkle);
-      const bothKneesBent = leftKneeAngle < 120 && rightKneeAngle < 120;
-      const bothKneesUp = leftKneeAngle > 150 && rightKneeAngle > 150;
       
-      if (bothKneesBent && !hasGoneDown.current) {
-        hasGoneDown.current = true;
-        setExerciseStatus('Going down... Perfect!');
-      } else if (bothKneesUp && hasGoneDown.current) {
+      // STRICTER THRESHOLDS - Much more demanding for proper squats
+      const bothKneesBent = leftKneeAngle < 100 && rightKneeAngle < 100; // Changed from 120 to 100
+      const bothKneesUp = leftKneeAngle > 160 && rightKneeAngle > 160; // Changed from 150 to 160
+      
+      // Additional hip depth validation
+      const avgHipY = (leftHip.y + rightHip.y) / 2;
+      const avgKneeY = (leftKnee.y + rightKnee.y) / 2;
+      const hipsBelowKnees = avgHipY > avgKneeY; // Hips must be below knees for valid squat
+      
+      // Track standing position for range of motion validation
+      if (bothKneesUp && !hasGoneDown.current) {
+        standingKneeAngle.current = Math.min(leftKneeAngle, rightKneeAngle);
+        maxSquatDepth.current = null;
+      }
+      
+      // Detect squat down phase with hold time requirement
+      if (bothKneesBent && hipsBelowKnees && !hasGoneDown.current) {
+        if (!squatStartTime.current) {
+          squatStartTime.current = Date.now();
+          setExerciseStatus('Going down... Hold the position!');
+          return;
+        }
+        
+        // Track maximum depth achieved
+        const currentDepth = Math.min(leftKneeAngle, rightKneeAngle);
+        if (!maxSquatDepth.current || currentDepth < maxSquatDepth.current) {
+          maxSquatDepth.current = currentDepth;
+        }
+        
+        const holdTime = Date.now() - squatStartTime.current;
+        
+        if (holdTime >= minSquatHoldTime) {
+          hasGoneDown.current = true;
+          setExerciseStatus('Perfect squat! Now stand up completely!');
+        } else {
+          const remainingTime = Math.ceil((minSquatHoldTime - holdTime) / 1000);
+          setExerciseStatus(`Hold position... ${remainingTime}s remaining`);
+        }
+      } 
+      // Detect squat up phase with range validation
+      else if (bothKneesUp && hasGoneDown.current) {
+        // Validate range of motion
+        if (standingKneeAngle.current && maxSquatDepth.current) {
+          const rangeOfMotion = standingKneeAngle.current - maxSquatDepth.current;
+          if (rangeOfMotion < minRangeOfMotion) {
+            hasGoneDown.current = false;
+            squatStartTime.current = null;
+            setExerciseStatus('Go deeper! Not enough range of motion. Try again.');
+            return;
+          }
+        }
+        
+        // Valid squat completed
         hasGoneDown.current = false;
+        squatStartTime.current = null;
         
         currentExerciseCount.current++;
         setExerciseCount(currentExerciseCount.current);
@@ -474,6 +539,11 @@ const EnhancedCamera = ({
           setExerciseStatus(`${repsPerSet - currentExerciseCount.current} more squats!`);
         }
       }
+      // Reset if user comes back up without proper depth
+      else if (!bothKneesBent && squatStartTime.current) {
+        squatStartTime.current = null;
+        setExerciseStatus('Squat deeper to count the rep!');
+      }
     } catch (error) {
       console.error('Squat detection error:', error);
     }
@@ -491,19 +561,44 @@ const EnhancedCamera = ({
         return;
       }
       
-      const currentArmsUp = leftWrist.y < leftShoulder.y && rightWrist.y < rightShoulder.y;
+      // STRICTER ARM DETECTION - Arms must be well above shoulders
+      const armThreshold = 0.05; // 5% of screen height above shoulders
+      const currentArmsUp = (leftWrist.y < leftShoulder.y - armThreshold) && 
+                           (rightWrist.y < rightShoulder.y - armThreshold);
+      
+      // STRICTER LEG DETECTION - Legs must be significantly wider apart
       const ankleDistance = Math.abs(leftAnkle.x - rightAnkle.x);
       const shoulderDistance = Math.abs(leftShoulder.x - rightShoulder.x);
       const currentLegsApart = ankleDistance > shoulderDistance * 1.5;
       
-      if (currentArmsUp && currentLegsApart && !hasCompletedJump.current) {
-        armsUp.current = true;
-        legsApart.current = true;
-        setExerciseStatus('Perfect position!');
-      } else if (!currentArmsUp && !currentLegsApart && armsUp.current && legsApart.current) {
+      // Both arms and legs must be in position simultaneously
+      const inJumpPosition = currentArmsUp && currentLegsApart;
+      
+      // Detect jump up phase with hold time requirement
+      if (inJumpPosition && !hasCompletedJump.current) {
+        if (!jumpStartTime.current) {
+          jumpStartTime.current = Date.now();
+          setExerciseStatus('Getting into position...');
+          return;
+        }
+        
+        const holdTime = Date.now() - jumpStartTime.current;
+        
+        if (holdTime >= minJumpHoldTime) {
+          armsUp.current = true;
+          legsApart.current = true;
+          setExerciseStatus('Perfect position! Now jump back!');
+        } else {
+          const remainingTime = Math.ceil((minJumpHoldTime - holdTime) / 100) * 100; // Show in 100ms increments
+          setExerciseStatus(`Hold position... ${remainingTime}ms`);
+        }
+      } 
+      // Detect jump back to starting position
+      else if (!currentArmsUp && !currentLegsApart && armsUp.current && legsApart.current) {
         hasCompletedJump.current = true;
         armsUp.current = false;
         legsApart.current = false;
+        jumpStartTime.current = null;
         
         currentExerciseCount.current++;
         setExerciseCount(currentExerciseCount.current);
@@ -534,9 +629,15 @@ const EnhancedCamera = ({
           setExerciseStatus(`${repsPerSet - currentExerciseCount.current} more jumping jacks!`);
         }
         
+        // Reset jump detection after short delay
         setTimeout(() => { 
           hasCompletedJump.current = false; 
-        }, 500);
+        }, 150);
+      }
+      // Reset if user moves out of position without completing
+      else if (!inJumpPosition && jumpStartTime.current) {
+        jumpStartTime.current = null;
+        setExerciseStatus('Get arms higher and legs wider apart!');
       }
     } catch (error) {
       console.error('Jumping jacks detection error:', error);
@@ -604,10 +705,15 @@ const EnhancedCamera = ({
           setExerciseCount(0);
           setCurrentSet(currentSetNumber.current);
           
+          // Reset all detection states
           hasGoneDown.current = false;
           armsUp.current = false;
           legsApart.current = false;
           hasCompletedJump.current = false;
+          squatStartTime.current = null;
+          jumpStartTime.current = null;
+          standingKneeAngle.current = null;
+          maxSquatDepth.current = null;
           
           isDetectionActive.current = true;
           setExerciseStatus(`Set ${currentSetNumber.current} - Ready!`);
