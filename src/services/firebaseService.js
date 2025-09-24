@@ -50,13 +50,11 @@ const isSameIndiaDay = (date1, date2) => {
 
 // ===== NOTIFICATION FUNCTIONS =====
 
-// Schedule daily notifications for a user
 export const scheduleDailyNotifications = async (userId, userData) => {
   try {
     const today = getIndiaDate();
     const dateStr = today.toISOString().split('T')[0];
     
-    // Get user's FCM token
     const userNotificationDoc = await getDoc(doc(db, 'userNotifications', userId));
     if (!userNotificationDoc.exists() || !userNotificationDoc.data().fcmToken) {
       console.log('No FCM token found for user:', userId);
@@ -66,7 +64,6 @@ export const scheduleDailyNotifications = async (userId, userData) => {
     const fcmToken = userNotificationDoc.data().fcmToken;
     const currentDay = userData.currentDay || 1;
     
-    // Create notification schedule for today
     const notificationSchedule = {
       userId,
       date: dateStr,
@@ -92,7 +89,7 @@ export const scheduleDailyNotifications = async (userId, userData) => {
           sent: false
         },
         hydrationReminder: {
-          scheduled: false, // Will be enabled if user completes before 10 AM
+          scheduled: false,
           time: '14:00',
           type: 'hydration',
           sent: false
@@ -101,8 +98,7 @@ export const scheduleDailyNotifications = async (userId, userData) => {
       createdAt: serverTimestamp()
     };
     
-    // Special handling for Sunday
-    if (today.getDay() === 0) { // Sunday
+    if (today.getDay() === 0) {
       notificationSchedule.notifications.weeklyProgress = {
         scheduled: true,
         time: '11:00',
@@ -121,7 +117,6 @@ export const scheduleDailyNotifications = async (userId, userData) => {
   }
 };
 
-// Enable hydration reminder if user completes tasks early
 export const enableHydrationReminder = async (userId) => {
   try {
     const today = getIndiaDate();
@@ -140,7 +135,6 @@ export const enableHydrationReminder = async (userId) => {
   }
 };
 
-// Mark notification as sent
 export const markNotificationSent = async (userId, notificationType) => {
   try {
     const today = getIndiaDate();
@@ -157,14 +151,12 @@ export const markNotificationSent = async (userId, notificationType) => {
   }
 };
 
-// Get pending notifications for current time
 export const getPendingNotifications = async () => {
   try {
     const now = getIndiaDate();
     const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const dateStr = now.toISOString().split('T')[0];
     
-    // Get all notification schedules for today
     const schedulesSnapshot = await getDocs(
       query(
         collection(db, 'notificationSchedules'),
@@ -178,16 +170,12 @@ export const getPendingNotifications = async () => {
       const schedule = scheduleDoc.data();
       const { notifications, userId, fcmToken, currentDay } = schedule;
       
-      // Check each notification type
       for (const [type, notification] of Object.entries(notifications)) {
         if (notification.scheduled && !notification.sent && notification.time === currentTime) {
           
-          // Special logic for certain notifications
           if (type === 'eveningCheck' || type === 'finalReminder') {
-            // Check if user has already completed tasks
             const hasCompleted = await checkIfUserCompletedToday(userId);
             if (hasCompleted) {
-              // Mark as sent without sending
               await markNotificationSent(userId, type);
               continue;
             }
@@ -212,7 +200,6 @@ export const getPendingNotifications = async () => {
   }
 };
 
-// Check if user completed tasks today
 const checkIfUserCompletedToday = async (userId) => {
   try {
     const todayCompletion = await getTodayCompletion(userId);
@@ -223,7 +210,6 @@ const checkIfUserCompletedToday = async (userId) => {
   }
 };
 
-// Get users for re-engagement notifications (inactive 2+ days)
 export const getUsersForReengagement = async () => {
   try {
     const twoDaysAgo = new Date(getIndiaDate().getTime() - 2 * 24 * 60 * 60 * 1000);
@@ -243,7 +229,6 @@ export const getUsersForReengagement = async () => {
       const userData = userDoc.data();
       const userId = userDoc.id;
       
-      // Get user's FCM token
       const userNotificationDoc = await getDoc(doc(db, 'userNotifications', userId));
       if (userNotificationDoc.exists() && userNotificationDoc.data().fcmToken) {
         inactiveUsers.push({
@@ -262,7 +247,6 @@ export const getUsersForReengagement = async () => {
   }
 };
 
-// Create notification content based on type
 export const createNotificationContent = (type, userData = {}, extra = {}) => {
   const { name = 'Champion', currentDay = 1, streakCount = 0, village = 'Your Village' } = userData;
   
@@ -307,13 +291,12 @@ export const createNotificationContent = (type, userData = {}, extra = {}) => {
   return notifications[type] || notifications.daily_reminder;
 };
 
-// Track notification analytics
 export const trackNotificationAnalytics = async (userId, type, status, extra = {}) => {
   try {
     const analyticsData = {
       userId,
       type,
-      status, // 'sent', 'delivered', 'clicked', 'dismissed'
+      status,
       timestamp: serverTimestamp(),
       date: getIndiaDate().toISOString().split('T')[0],
       ...extra
@@ -327,7 +310,6 @@ export const trackNotificationAnalytics = async (userId, type, status, extra = {
   }
 };
 
-// Get notification analytics for admin dashboard
 export const getNotificationAnalytics = async (days = 7) => {
   try {
     const startDate = new Date(getIndiaDate().getTime() - days * 24 * 60 * 60 * 1000);
@@ -346,7 +328,6 @@ export const getNotificationAnalytics = async (days = 7) => {
       ...doc.data() 
     }));
     
-    // Calculate summary stats
     const summary = {
       totalSent: analytics.filter(a => a.status === 'sent').length,
       totalDelivered: analytics.filter(a => a.status === 'delivered').length,
@@ -372,7 +353,7 @@ export const getNotificationAnalytics = async (days = 7) => {
   }
 };
 
-// ===== EXISTING USER FUNCTIONS =====
+// ===== USER FUNCTIONS =====
 
 export const getUserData = async (userId) => {
   try {
@@ -412,6 +393,61 @@ export const updateUserProgress = async (userId, progressData) => {
   } catch (error) {
     console.error('Error updating progress:', error);
     throw error;
+  }
+};
+
+// ===== STREAK VALIDATION FUNCTIONS =====
+
+// MODIFIED: Now accepts any date parameter
+export const getTodayCompletion = async (userId, dateStr = null) => {
+  try {
+    const targetDate = dateStr || getIndiaDate().toISOString().split('T')[0];
+    const completionId = `${userId}_${targetDate}`;
+    
+    const completionDoc = await getDoc(doc(db, 'dailyCompletions', completionId));
+    if (completionDoc.exists()) {
+      return { id: completionDoc.id, ...completionDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting completion:', error);
+    return null;
+  }
+};
+
+// NEW: Validate and fix user streak (call on Homepage load)
+export const validateUserStreak = async (userId) => {
+  try {
+    const userData = await getUserData(userId);
+    if (!userData) return 0;
+    
+    // If user already completed today, streak is current and valid
+    const todayCompletion = await getTodayCompletion(userId);
+    if (todayCompletion && todayCompletion.allTasksCompleted) {
+      return userData.streakCount;
+    }
+    
+    // Check if they completed yesterday
+    const yesterday = new Date(getIndiaDate().getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayCompletion = await getTodayCompletion(userId, yesterdayStr);
+    
+    // Reset streak if they missed yesterday and currently have a streak
+    if (userData.streakCount > 0 && (!yesterdayCompletion || !yesterdayCompletion.allTasksCompleted)) {
+      await updateUserProgress(userId, {
+        streakCount: 0,
+        streakBrokenAt: serverTimestamp()
+      });
+      
+      console.log(`Reset streak for user ${userId} - missed ${yesterdayStr}`);
+      return 0;
+    }
+    
+    return userData.streakCount;
+    
+  } catch (error) {
+    console.error('Error validating user streak:', error);
+    return 0;
   }
 };
 
@@ -557,8 +593,6 @@ export const getAllPlans = async () => {
   }
 };
 
-// ===== DAILY TASK RESOLUTION WITH FALLBACK =====
-
 const calculateWeekNumber = (currentDay) => {
   return Math.ceil(currentDay / 7);
 };
@@ -576,22 +610,18 @@ const getTaskIcon = (taskType) => {
   }
 };
 
-// Get daily tasks with fallback hierarchy
 export const getDailyTasksForUser = async (level, currentDay) => {
   try {
     const weekNumber = calculateWeekNumber(currentDay);
-    const currentDayName = getIndiaDayName(); // Always use current calendar day
+    const currentDayName = getIndiaDayName();
     
     console.log(`Getting tasks for ${currentDayName}, week ${weekNumber}, level ${level}`);
     
-    // Try current week first
     let dailyPlan = await getDailyPlan(currentDayName, weekNumber, level);
     
-    // Fallback hierarchy if current week not found
     if (!dailyPlan) {
       console.log(`No plan for week ${weekNumber}, trying previous weeks...`);
       
-      // Try previous weeks
       for (let fallbackWeek = weekNumber - 1; fallbackWeek >= 1; fallbackWeek--) {
         dailyPlan = await getDailyPlan(currentDayName, fallbackWeek, level);
         if (dailyPlan) {
@@ -601,7 +631,6 @@ export const getDailyTasksForUser = async (level, currentDay) => {
       }
     }
     
-    // If still no plan found, return empty with flag for WhatsApp support
     if (!dailyPlan || !dailyPlan.tasks) {
       console.log(`No plans found for ${currentDayName} ${level}`);
       return { tasks: [], showWhatsAppSupport: true };
@@ -609,7 +638,6 @@ export const getDailyTasksForUser = async (level, currentDay) => {
     
     console.log('Found plan:', dailyPlan);
     
-    // Get full task details
     const dailyTasks = [];
     
     for (const taskPlan of dailyPlan.tasks) {
@@ -647,32 +675,12 @@ export const getDailyTasksForUser = async (level, currentDay) => {
 
 // ===== DAILY COMPLETION TRACKING =====
 
-// Get today's completion tracking document
-export const getTodayCompletion = async (userId) => {
-  try {
-    const indiaDate = getIndiaDate();
-    const dateStr = indiaDate.toISOString().split('T')[0]; // YYYY-MM-DD
-    const completionId = `${userId}_${dateStr}`;
-    
-    const completionDoc = await getDoc(doc(db, 'dailyCompletions', completionId));
-    if (completionDoc.exists()) {
-      return { id: completionDoc.id, ...completionDoc.data() };
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting today completion:', error);
-    throw error;
-  }
-};
-
-// Save task completion for today
 export const saveTaskCompletion = async (userId, taskId, currentDay) => {
   try {
     const indiaDate = getIndiaDate();
     const dateStr = indiaDate.toISOString().split('T')[0];
     const completionId = `${userId}_${dateStr}`;
     
-    // Get existing completion or create new
     let completionData = await getTodayCompletion(userId);
     
     if (!completionData) {
@@ -686,13 +694,11 @@ export const saveTaskCompletion = async (userId, taskId, currentDay) => {
       };
     }
     
-    // Mark task as completed
     completionData.completedTasks[taskId] = {
       completed: true,
       completedAt: serverTimestamp()
     };
     
-    // Save updated completion
     await setDoc(doc(db, 'dailyCompletions', completionId), {
       ...completionData,
       updatedAt: serverTimestamp()
@@ -705,7 +711,6 @@ export const saveTaskCompletion = async (userId, taskId, currentDay) => {
   }
 };
 
-// Check if all tasks completed for today and update user progress
 export const checkAndUpdateDayCompletion = async (userId, currentDay, totalTasks) => {
   try {
     const todayCompletion = await getTodayCompletion(userId);
@@ -716,7 +721,6 @@ export const checkAndUpdateDayCompletion = async (userId, currentDay, totalTasks
     const allCompleted = completedTaskCount >= totalTasks;
     
     if (allCompleted && !todayCompletion.allTasksCompleted) {
-      // Mark day as fully completed
       const indiaDate = getIndiaDate();
       const dateStr = indiaDate.toISOString().split('T')[0];
       const completionId = `${userId}_${dateStr}`;
@@ -726,12 +730,11 @@ export const checkAndUpdateDayCompletion = async (userId, currentDay, totalTasks
         dayCompletedAt: serverTimestamp()
       });
       
-      // Check if completed before 10 AM for hydration reminder
       if (indiaDate.getHours() < 10) {
         await enableHydrationReminder(userId);
       }
       
-      // Update user progress
+      // FIXED: Just increment streak instead of recalculating
       await updateUserDayCompletion(userId, currentDay);
       
       return true;
@@ -744,21 +747,15 @@ export const checkAndUpdateDayCompletion = async (userId, currentDay, totalTasks
   }
 };
 
-// Update user's day completion, points, and streak
+// FIXED: Now only increments streak by 1
 const updateUserDayCompletion = async (userId, completedDay) => {
   try {
     const userData = await getUserData(userId);
     if (!userData) return;
     
-    // Calculate new streak
-    let newStreak = 1;
+    // Simply increment current streak by 1
+    const newStreak = (userData.streakCount || 0) + 1;
     
-    // Check if this completion continues a streak
-    if (userData.lastCompletedDay && userData.lastCompletedDay === completedDay - 1) {
-      newStreak = (userData.streakCount || 0) + 1;
-    }
-    
-    // Update user data
     await updateUserProgress(userId, {
       currentDay: completedDay + 1,
       points: (userData.points || 0) + 1,
@@ -774,17 +771,15 @@ const updateUserDayCompletion = async (userId, completedDay) => {
   }
 };
 
-// Check if user can access training today (prevent multiple day completion)
 export const canUserTrainToday = async (userId) => {
   try {
     const userData = await getUserData(userId);
     if (!userData) return false;
     
-    // Check if user already completed a day today
     const todayCompletion = await getTodayCompletion(userId);
     
     if (todayCompletion && todayCompletion.allTasksCompleted) {
-      return false; // Already completed a day today
+      return false;
     }
     
     return true;
@@ -794,10 +789,8 @@ export const canUserTrainToday = async (userId) => {
   }
 };
 
-// Reset incomplete days (to be called by Cloud Function at midnight)
 export const resetIncompleteDays = async () => {
   try {
-    // Get yesterday's incomplete completions
     const yesterday = new Date(getIndiaDate().getTime() - 24 * 60 * 60 * 1000);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
     
@@ -809,7 +802,6 @@ export const resetIncompleteDays = async () => {
       )
     );
     
-    // Reset streaks for users with incomplete days
     for (const completionDoc of completionsSnapshot.docs) {
       const completionData = completionDoc.data();
       const userId = completionData.userId;
@@ -911,7 +903,6 @@ export const getAllUsers = async () => {
 export const getUserStats = async () => {
   try {
     const users = await getAllUsers();
-    
     const stats = {
       totalUsers: users.length,
       activeUsers: users.filter(user => user.streakCount > 0).length,

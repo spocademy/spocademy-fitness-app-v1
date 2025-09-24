@@ -1,7 +1,7 @@
 // src/components/dashboard/Homepage.js
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { getVillageRankings, canUserTrainToday } from '../../services/firebaseService';
+import { getVillageRankings, canUserTrainToday, validateUserStreak } from '../../services/firebaseService';
 import DailyPlanPage from '../daily/DailyPlanPage';
 import './Homepage.css';
 
@@ -12,7 +12,8 @@ const Homepage = () => {
   const [villageRankings, setVillageRankings] = useState([]);
   const [loadingRankings, setLoadingRankings] = useState(true);
   const [canTrainToday, setCanTrainToday] = useState(true);
-  const { currentUser, userData, logout } = useAuth();
+  const [validatedStreak, setValidatedStreak] = useState(0);
+  const { currentUser, userData, logout, refreshUserData } = useAuth();
 
   const text = {
     en: {
@@ -67,27 +68,40 @@ const Homepage = () => {
     loadRankings();
   }, []);
 
-  // Check if user can train today
+  // FIXED: Validate streak on app load and check training access
   useEffect(() => {
-    const checkTrainingAccess = async () => {
+    const initializeUserData = async () => {
       if (!currentUser) return;
       
       try {
+        // 1. First validate and fix streak
+        const correctedStreak = await validateUserStreak(currentUser.uid);
+        setValidatedStreak(correctedStreak);
+        
+        // 2. Then check if user can train today
         const canTrain = await canUserTrainToday(currentUser.uid);
         setCanTrainToday(canTrain);
+        
+        // 3. Refresh user data if streak was corrected
+        if (correctedStreak !== userData?.streakCount) {
+          if (refreshUserData) {
+            await refreshUserData();
+          }
+        }
+        
       } catch (error) {
-        console.error('Error checking training access:', error);
+        console.error('Error initializing user data:', error);
       }
     };
     
-    checkTrainingAccess();
-  }, [currentUser, userData]);
+    initializeUserData();
+  }, [currentUser, userData?.streakCount, refreshUserData]);
 
-  // Calculate user stats with proper limits
+  // Calculate user stats with validated streak
   const userStats = {
     name: userData?.name || 'User',
     currentDay: userData?.currentDay || 1,
-    streak: Math.min(userData?.streakCount || 0, (userData?.currentDay || 1) - 1),
+    streak: validatedStreak, // Use validated streak instead of userData.streakCount
     totalPoints: Math.min(userData?.points || 0, (userData?.currentDay || 1) - 1),
     village: userData?.village || 'Unknown'
   };
@@ -147,14 +161,24 @@ const Homepage = () => {
     setCurrentView('homepage');
     setSelectedDay(null);
     
-    // Refresh training access status when returning
+    // Refresh training access status and streak when returning
     const refreshAccess = async () => {
       if (currentUser) {
         try {
+          // Re-validate streak
+          const correctedStreak = await validateUserStreak(currentUser.uid);
+          setValidatedStreak(correctedStreak);
+          
+          // Check training access
           const canTrain = await canUserTrainToday(currentUser.uid);
           setCanTrainToday(canTrain);
+          
+          // Refresh user data
+          if (refreshUserData) {
+            await refreshUserData();
+          }
         } catch (error) {
-          console.error('Error refreshing training access:', error);
+          console.error('Error refreshing data on return:', error);
         }
       }
     };
@@ -163,15 +187,15 @@ const Homepage = () => {
   };
 
   const handleLogout = async () => {
-  const confirmLogout = window.confirm('Are you sure you want to logout?');
-  if (confirmLogout) {
-    try {
-      await logout();
-    } catch (error) {
-      console.error('Logout error:', error);
+    const confirmLogout = window.confirm('Are you sure you want to logout?');
+    if (confirmLogout) {
+      try {
+        await logout();
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
     }
-  }
-};
+  };
 
   if (currentView === 'dailyplan') {
     return (

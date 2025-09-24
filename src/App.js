@@ -9,9 +9,9 @@ import './App.css';
 function AppContent() {
   const { currentUser, userData, loading } = useAuth();
 
-  console.log('Current User:', currentUser);
-  console.log('User Data:', userData);
-  console.log('Loading:', loading);
+  // console.log('Current User:', currentUser); 
+  // console.log('User Data:', userData);
+  // console.log('Loading:', loading);
 
   if (loading) {
     return (
