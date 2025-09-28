@@ -1,4 +1,4 @@
-const webpush = require('web-push');
+import webpush from 'web-push';
 
 export default async function handler(req, res) {
   try {
@@ -30,6 +30,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    console.log('Environment check:', {
+      hasFirebaseProjectId: !!process.env.FIREBASE_PROJECT_ID,
+      hasFirebaseApiKey: !!process.env.FIREBASE_API_KEY,
+      hasVapidPublicKey: !!process.env.VAPID_PUBLIC_KEY,
+      hasVapidPrivateKey: !!process.env.VAPID_PRIVATE_KEY,
+      projectId: process.env.FIREBASE_PROJECT_ID
+    });
+
     // If scheduled for later, store in database
     if (scheduleType === 'scheduled' && scheduledDateTime) {
       const scheduledNotification = {
@@ -58,7 +66,9 @@ export default async function handler(req, res) {
       );
 
       if (!scheduleResponse.ok) {
-        throw new Error('Failed to schedule notification');
+        const errorText = await scheduleResponse.text();
+        console.error('Schedule response error:', scheduleResponse.status, errorText);
+        throw new Error(`Failed to schedule notification: ${scheduleResponse.status}`);
       }
 
       return res.status(200).json({
@@ -71,28 +81,40 @@ export default async function handler(req, res) {
     // Send immediately
     console.log('Sending manual Web Push notification:', { title, message, villages, levels, activityStatus });
 
-    // Get all users
-    const usersResponse = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/users?key=${process.env.FIREBASE_API_KEY}`
-    );
-
+    // Get all users with detailed error handling
+    const usersUrl = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/users?key=${process.env.FIREBASE_API_KEY}`;
+    console.log('Fetching users from:', usersUrl);
+    
+    const usersResponse = await fetch(usersUrl);
+    
     if (!usersResponse.ok) {
-      throw new Error('Failed to fetch users');
+      const errorText = await usersResponse.text();
+      console.error('Users fetch error:', usersResponse.status, errorText);
+      throw new Error(`Failed to fetch users: ${usersResponse.status} - ${errorText}`);
     }
 
     const usersData = await usersResponse.json();
+    console.log('Users data structure:', {
+      hasDocuments: !!usersData.documents,
+      documentCount: usersData.documents?.length || 0
+    });
+    
     const users = usersData.documents || [];
 
-    // Get Web Push subscriptions
-    const subscriptionsResponse = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/webPushSubscriptions?key=${process.env.FIREBASE_API_KEY}`
-    );
+    // Get Web Push subscriptions with detailed error handling
+    const subscriptionsUrl = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/webPushSubscriptions?key=${process.env.FIREBASE_API_KEY}`;
+    console.log('Fetching subscriptions from:', subscriptionsUrl);
+    
+    const subscriptionsResponse = await fetch(subscriptionsUrl);
 
     if (!subscriptionsResponse.ok) {
-      throw new Error('Failed to fetch push subscriptions');
+      const errorText = await subscriptionsResponse.text();
+      console.error('Subscriptions fetch error:', subscriptionsResponse.status, errorText);
+      // Don't throw error here - collection might not exist yet
+      console.log('No subscriptions collection found - this is expected for new Web Push setup');
     }
 
-    const subscriptionsData = await subscriptionsResponse.json();
+    const subscriptionsData = subscriptionsResponse.ok ? await subscriptionsResponse.json() : { documents: [] };
     const userSubscriptions = {};
     
     if (subscriptionsData.documents) {
@@ -125,7 +147,10 @@ export default async function handler(req, res) {
       if (fields.role && fields.role.stringValue === 'admin') continue;
       
       const subscription = userSubscriptions[userId];
-      if (!subscription) continue;
+      if (!subscription) {
+        console.log('No subscription found for user:', userId);
+        continue;
+      }
 
       let shouldInclude = false;
       
@@ -239,10 +264,14 @@ export default async function handler(req, res) {
         // Remove invalid subscriptions
         if (error.statusCode === 410 || error.statusCode === 404) {
           console.log('Removing invalid subscription for user:', user.userId);
-          await fetch(
-            `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/webPushSubscriptions/${user.userId}?key=${process.env.FIREBASE_API_KEY}`,
-            { method: 'DELETE' }
-          ).catch(console.error);
+          try {
+            await fetch(
+              `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/webPushSubscriptions/${user.userId}?key=${process.env.FIREBASE_API_KEY}`,
+              { method: 'DELETE' }
+            );
+          } catch (deleteError) {
+            console.error('Failed to delete invalid subscription:', deleteError);
+          }
         }
       }
 
