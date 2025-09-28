@@ -1,9 +1,18 @@
+const webpush = require('web-push');
+
 export default async function handler(req, res) {
   try {
     // Only allow POST requests
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method not allowed' });
     }
+
+    // Configure web-push with VAPID keys
+    webpush.setVapidDetails(
+      'mailto:admin@fitness.spocademy.com',
+      process.env.VAPID_PUBLIC_KEY,
+      process.env.VAPID_PRIVATE_KEY
+    );
 
     const { 
       title, 
@@ -60,7 +69,7 @@ export default async function handler(req, res) {
     }
 
     // Send immediately
-    console.log('Sending manual notification:', { title, message, villages, levels, activityStatus });
+    console.log('Sending manual Web Push notification:', { title, message, villages, levels, activityStatus });
 
     // Get all users
     const usersResponse = await fetch(
@@ -74,31 +83,34 @@ export default async function handler(req, res) {
     const usersData = await usersResponse.json();
     const users = usersData.documents || [];
 
-    // Get user notification tokens
-    const tokensResponse = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/userNotifications?key=${process.env.FIREBASE_API_KEY}`
+    // Get Web Push subscriptions
+    const subscriptionsResponse = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/webPushSubscriptions?key=${process.env.FIREBASE_API_KEY}`
     );
 
-    if (!tokensResponse.ok) {
-      throw new Error('Failed to fetch user tokens');
+    if (!subscriptionsResponse.ok) {
+      throw new Error('Failed to fetch push subscriptions');
     }
 
-    const tokensData = await tokensResponse.json();
-    const userTokens = {};
+    const subscriptionsData = await subscriptionsResponse.json();
+    const userSubscriptions = {};
     
-    if (tokensData.documents) {
-      tokensData.documents.forEach(doc => {
+    if (subscriptionsData.documents) {
+      subscriptionsData.documents.forEach(doc => {
         const userId = doc.name.split('/').pop();
         const data = doc.fields;
         
-        if (data.fcmToken && data.fcmToken.stringValue && 
-            data.notificationPermission && data.notificationPermission.stringValue === 'granted') {
-          userTokens[userId] = data.fcmToken.stringValue;
+        if (data.subscription && data.subscription.stringValue) {
+          try {
+            userSubscriptions[userId] = JSON.parse(data.subscription.stringValue);
+          } catch (error) {
+            console.error('Invalid subscription format for user:', userId, error);
+          }
         }
       });
     }
 
-    console.log('Found tokens for users:', Object.keys(userTokens).length);
+    console.log('Found subscriptions for users:', Object.keys(userSubscriptions).length);
 
     const notifications = [];
     const today = new Date().toISOString().split('T')[0];
@@ -112,12 +124,12 @@ export default async function handler(req, res) {
       // Skip admin users
       if (fields.role && fields.role.stringValue === 'admin') continue;
       
-      const fcmToken = userTokens[userId];
-      if (!fcmToken) continue;
+      const subscription = userSubscriptions[userId];
+      if (!subscription) continue;
 
       let shouldInclude = false;
       
-      // If "all" is selected, include everyone with tokens
+      // If "all" is selected, include everyone with subscriptions
       if (activityStatus.includes('all')) {
         shouldInclude = true;
       } else {
@@ -154,81 +166,88 @@ export default async function handler(req, res) {
         level: fields.level ? fields.level.stringValue : ''
       });
 
-      // Create FCM message using LEGACY format
-      const fcmMessage = {
-        to: fcmToken,
-        notification: {
-          title: title,
-          body: message,
-          icon: '/logo192.png',
-          click_action: 'https://fitness.spocademy.com/'
-        },
+      // Create Web Push notification payload
+      const payload = JSON.stringify({
+        title: title,
+        body: message,
+        icon: '/JustS.png',
+        badge: '/JustS.png',
+        tag: 'spocademy-manual',
+        requireInteraction: true,
+        actions: [
+          {
+            action: 'open',
+            title: 'Open App'
+          },
+          {
+            action: 'dismiss',
+            title: 'Dismiss'
+          }
+        ],
         data: {
           type: 'manual_notification',
-          url: '/',
-          userId: userId
+          url: 'https://fitness.spocademy.com/',
+          userId: userId,
+          timestamp: Date.now()
         }
-      };
+      });
 
-      notifications.push(fcmMessage);
+      notifications.push({
+        subscription,
+        payload,
+        user: { userId, name: userName }
+      });
     }
 
     console.log('Targeted users:', targetedUsers.length);
     console.log('Notifications to send:', notifications.length);
 
-    // Send notifications using FCM LEGACY API with corrected authentication
+    // Send Web Push notifications
     let successCount = 0;
     let failureCount = 0;
     let deliveryResults = [];
 
     for (let i = 0; i < notifications.length; i++) {
-      const message = notifications[i];
-      const user = targetedUsers[i];
+      const { subscription, payload, user } = notifications[i];
       
       try {
-        // Use the FCM_SERVER_KEY environment variable
-        const response = await fetch('https://fcm.googleapis.com/fcm/send', {
-          method: 'POST',
-          headers: {
-            'Authorization': `key=${process.env.FCM_SERVER_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(message)
+        await webpush.sendNotification(subscription, payload, {
+          TTL: 86400, // 24 hours
+          urgency: 'normal'
         });
 
-        const result = await response.json();
+        successCount++;
+        deliveryResults.push({
+          userId: user.userId,
+          name: user.name,
+          status: 'sent'
+        });
+
+        console.log('Web Push sent successfully to:', user.name);
+
+      } catch (error) {
+        failureCount++;
+        deliveryResults.push({
+          userId: user.userId,
+          name: user.name,
+          status: 'failed',
+          error: error.message
+        });
         
-        console.log('FCM Response for user', user.name, ':', {
-          status: response.status,
-          success: result.success,
-          failure: result.failure,
-          results: result.results
-        });
+        console.error('Web Push send failed for user:', user.name, error.message);
 
-        if (response.ok && result.success === 1) {
-          successCount++;
-          deliveryResults.push({
-            userId: user.userId,
-            name: user.name,
-            status: 'sent',
-            messageId: result.results?.[0]?.message_id
-          });
-        } else {
-          failureCount++;
-          const errorMsg = result.results?.[0]?.error || result.error || 'Unknown error';
-          deliveryResults.push({
-            userId: user.userId,
-            name: user.name,
-            status: 'failed',
-            error: errorMsg
-          });
-          console.error('FCM send failed for user:', user.name, {
-            error: errorMsg,
-            fullResponse: result
-          });
+        // Remove invalid subscriptions
+        if (error.statusCode === 410 || error.statusCode === 404) {
+          console.log('Removing invalid subscription for user:', user.userId);
+          await fetch(
+            `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/webPushSubscriptions/${user.userId}?key=${process.env.FIREBASE_API_KEY}`,
+            { method: 'DELETE' }
+          ).catch(console.error);
         }
+      }
 
-        // Track notification analytics
+      // Track notification analytics
+      try {
         await fetch(
           `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/notificationAnalytics?key=${process.env.FIREBASE_API_KEY}`,
           {
@@ -240,7 +259,7 @@ export default async function handler(req, res) {
               fields: {
                 userId: { stringValue: user.userId },
                 type: { stringValue: 'manual_notification' },
-                status: { stringValue: response.ok && result.success === 1 ? 'sent' : 'failed' },
+                status: { stringValue: successCount > failureCount ? 'sent' : 'failed' },
                 timestamp: { timestampValue: new Date().toISOString() },
                 date: { stringValue: today },
                 adminId: { stringValue: adminUserId },
@@ -250,20 +269,12 @@ export default async function handler(req, res) {
             })
           }
         );
-
-      } catch (error) {
-        failureCount++;
-        deliveryResults.push({
-          userId: user.userId,
-          name: user.name,
-          status: 'error',
-          error: error.message
-        });
-        console.error('Notification send error for user:', user.name, error);
+      } catch (analyticsError) {
+        console.error('Analytics tracking failed:', analyticsError);
       }
     }
 
-    console.log(`Manual notifications sent: ${successCount} success, ${failureCount} failures`);
+    console.log(`Manual Web Push notifications sent: ${successCount} success, ${failureCount} failures`);
 
     res.status(200).json({
       success: true,
@@ -274,17 +285,18 @@ export default async function handler(req, res) {
       deliveryResults: deliveryResults,
       debug: {
         totalUsersInDb: users.length,
-        usersWithTokens: Object.keys(userTokens).length,
+        usersWithSubscriptions: Object.keys(userSubscriptions).length,
         environmentCheck: {
           hasFirebaseProjectId: !!process.env.FIREBASE_PROJECT_ID,
           hasFirebaseApiKey: !!process.env.FIREBASE_API_KEY,
-          hasFcmServerKey: !!process.env.FCM_SERVER_KEY
+          hasVapidPublicKey: !!process.env.VAPID_PUBLIC_KEY,
+          hasVapidPrivateKey: !!process.env.VAPID_PRIVATE_KEY
         }
       }
     });
 
   } catch (error) {
-    console.error('Manual notification error:', error);
+    console.error('Manual Web Push notification error:', error);
     res.status(500).json({ 
       error: 'Internal server error',
       message: error.message,

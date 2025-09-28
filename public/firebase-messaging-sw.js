@@ -1,4 +1,4 @@
-// public/sw.js - Complete service worker with FCM + all features
+// public/firebase-messaging-sw.js
 importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging-compat.js');
 
@@ -16,7 +16,7 @@ const messaging = firebase.messaging();
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
-  console.log('Received background message: ', payload);
+  console.log('Background message received:', payload);
   
   const notificationTitle = payload.notification?.title || 'Spocademy Training';
   const notificationOptions = {
@@ -34,53 +34,23 @@ messaging.onBackgroundMessage((payload) => {
       },
       {
         action: 'dismiss',
-        title: 'Later',
-        icon: '/logo192.png'
+        title: 'Later'
       }
     ],
     data: {
       url: payload.data?.url || '/',
-      timestamp: Date.now(),
-      type: payload.data?.type || 'training_reminder',
-      userId: payload.data?.userId
+      type: payload.data?.type || 'training_reminder'
     }
   };
 
-  // Track notification delivery
-  trackNotificationDelivery(payload.data?.type || 'unknown');
-
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
-
-// Track notification delivery to Firebase
-async function trackNotificationDelivery(notificationType) {
-  try {
-    // Store delivery tracking data
-    const deliveryData = {
-      type: notificationType,
-      deliveredAt: new Date().toISOString(),
-      status: 'delivered'
-    };
-    
-    // Send to analytics endpoint
-    fetch('/api/track-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(deliveryData)
-    }).catch(console.error);
-  } catch (error) {
-    console.error('Failed to track notification delivery:', error);
-  }
-}
 
 // Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
   console.log('Notification clicked:', event);
   
   event.notification.close();
-  
-  // Track click
-  trackNotificationClick(event.notification.data?.type || 'unknown');
   
   if (event.action === 'dismiss') {
     return;
@@ -106,53 +76,12 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Track notification clicks
-async function trackNotificationClick(notificationType) {
-  try {
-    const clickData = {
-      type: notificationType,
-      clickedAt: new Date().toISOString(),
-      status: 'clicked'
-    };
-    
-    fetch('/api/track-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(clickData)
-    }).catch(console.error);
-  } catch (error) {
-    console.error('Failed to track notification click:', error);
-  }
-}
-
 // Handle notification close
 self.addEventListener('notificationclose', (event) => {
   console.log('Notification closed:', event);
-  
-  // Track dismissal
-  trackNotificationDismissal(event.notification.data?.type || 'unknown');
 });
 
-// Track notification dismissals
-async function trackNotificationDismissal(notificationType) {
-  try {
-    const dismissalData = {
-      type: notificationType,
-      dismissedAt: new Date().toISOString(),
-      status: 'dismissed'
-    };
-    
-    fetch('/api/track-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dismissalData)
-    }).catch(console.error);
-  } catch (error) {
-    console.error('Failed to track notification dismissal:', error);
-  }
-}
-
-// Basic PWA functionality
+// Service worker installation
 self.addEventListener('install', (event) => {
   console.log('Service Worker: Install');
   self.skipWaiting();
@@ -161,9 +90,4 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   console.log('Service Worker: Activate');
   event.waitUntil(self.clients.claim());
-});
-
-// Basic fetch handler - just pass through to network
-self.addEventListener('fetch', (event) => {
-  return;
 });
