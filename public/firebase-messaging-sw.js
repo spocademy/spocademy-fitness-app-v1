@@ -1,49 +1,86 @@
-// public/firebase-messaging-sw.js
-importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging-compat.js');
+// Web Push Service Worker for Spocademy
+// Handles background notifications and PWA functionality
 
-// Firebase configuration
-firebase.initializeApp({
-  apiKey: "AIzaSyC_Fm-hxEyAZigpydCWH1n7Y8IUrNe9qxM",
-  authDomain: "spocademy-mvp1.firebaseapp.com",
-  projectId: "spocademy-mvp1",
-  storageBucket: "spocademy-mvp1.firebasestorage.app",
-  messagingSenderId: "910046288653",
-  appId: "1:910046288653:web:2e836eb413309925d26e44"
+// Service worker installation
+self.addEventListener('install', (event) => {
+  console.log('Service Worker: Install');
+  self.skipWaiting();
 });
 
-const messaging = firebase.messaging();
+self.addEventListener('activate', (event) => {
+  console.log('Service Worker: Activate');
+  event.waitUntil(self.clients.claim());
+});
 
-// Handle background messages
-messaging.onBackgroundMessage((payload) => {
-  console.log('Background message received:', payload);
+// Handle Web Push notifications
+self.addEventListener('push', (event) => {
+  console.log('Push event received:', event);
   
-  const notificationTitle = payload.notification?.title || 'Spocademy Training';
-  const notificationOptions = {
-    body: payload.notification?.body || 'Time for your training!',
-    icon: '/logo192.png',
-    badge: '/logo192.png',
-    vibrate: [200, 100, 200],
+  let notificationData = {
+    title: 'Spocademy Training',
+    body: 'Time for your training!',
+    icon: '/JustS.png',
+    badge: '/JustS.png',
     tag: 'spocademy-notification',
     requireInteraction: true,
     actions: [
       {
         action: 'open',
-        title: 'Start Training',
-        icon: '/logo192.png'
+        title: 'Open App'
       },
       {
         action: 'dismiss',
-        title: 'Later'
+        title: 'Dismiss'
       }
     ],
     data: {
-      url: payload.data?.url || '/',
-      type: payload.data?.type || 'training_reminder'
+      url: 'https://fitness.spocademy.com/',
+      timestamp: Date.now()
     }
   };
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  // Parse notification data if available
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      console.log('Push payload received:', payload);
+      
+      notificationData = {
+        ...notificationData,
+        title: payload.title || notificationData.title,
+        body: payload.body || notificationData.body,
+        icon: payload.icon || notificationData.icon,
+        badge: payload.badge || notificationData.badge,
+        tag: payload.tag || notificationData.tag,
+        requireInteraction: payload.requireInteraction !== undefined ? payload.requireInteraction : notificationData.requireInteraction,
+        actions: payload.actions || notificationData.actions,
+        data: {
+          ...notificationData.data,
+          ...payload.data
+        }
+      };
+    } catch (error) {
+      console.error('Error parsing push payload:', error);
+    }
+  }
+
+  // Track notification delivery
+  trackNotificationDelivery(notificationData.data?.type || 'unknown');
+
+  // Show notification
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      tag: notificationData.tag,
+      requireInteraction: notificationData.requireInteraction,
+      actions: notificationData.actions,
+      data: notificationData.data,
+      vibrate: [200, 100, 200],
+      silent: false
+    })
+  );
 });
 
 // Handle notification clicks
@@ -52,6 +89,9 @@ self.addEventListener('notificationclick', (event) => {
   
   event.notification.close();
   
+  // Track click
+  trackNotificationClick(event.notification.data?.type || 'unknown');
+  
   if (event.action === 'dismiss') {
     return;
   }
@@ -59,11 +99,11 @@ self.addEventListener('notificationclick', (event) => {
   // Open app when notification is clicked
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      const url = event.notification.data?.url || '/';
+      const url = event.notification.data?.url || 'https://fitness.spocademy.com/';
       
       // If app is already open, focus it
       for (const client of clientList) {
-        if (client.url.includes(url) && 'focus' in client) {
+        if (client.url.includes('fitness.spocademy.com') && 'focus' in client) {
           return client.focus();
         }
       }
@@ -79,15 +119,70 @@ self.addEventListener('notificationclick', (event) => {
 // Handle notification close
 self.addEventListener('notificationclose', (event) => {
   console.log('Notification closed:', event);
+  
+  // Track dismissal
+  trackNotificationDismissal(event.notification.data?.type || 'unknown');
 });
 
-// Service worker installation
-self.addEventListener('install', (event) => {
-  console.log('Service Worker: Install');
-  self.skipWaiting();
-});
+// Track notification delivery
+async function trackNotificationDelivery(notificationType) {
+  try {
+    const deliveryData = {
+      type: notificationType,
+      deliveredAt: new Date().toISOString(),
+      status: 'delivered'
+    };
+    
+    console.log('Tracking notification delivery:', deliveryData);
+    
+    // Store locally for tracking
+    const existingData = JSON.parse(localStorage.getItem('notificationTracking') || '[]');
+    existingData.push(deliveryData);
+    localStorage.setItem('notificationTracking', JSON.stringify(existingData));
+  } catch (error) {
+    console.error('Failed to track notification delivery:', error);
+  }
+}
 
-self.addEventListener('activate', (event) => {
-  console.log('Service Worker: Activate');
-  event.waitUntil(self.clients.claim());
+// Track notification clicks
+async function trackNotificationClick(notificationType) {
+  try {
+    const clickData = {
+      type: notificationType,
+      clickedAt: new Date().toISOString(),
+      status: 'clicked'
+    };
+    
+    console.log('Tracking notification click:', clickData);
+    
+    const existingData = JSON.parse(localStorage.getItem('notificationTracking') || '[]');
+    existingData.push(clickData);
+    localStorage.setItem('notificationTracking', JSON.stringify(existingData));
+  } catch (error) {
+    console.error('Failed to track notification click:', error);
+  }
+}
+
+// Track notification dismissals
+async function trackNotificationDismissal(notificationType) {
+  try {
+    const dismissalData = {
+      type: notificationType,
+      dismissedAt: new Date().toISOString(),
+      status: 'dismissed'
+    };
+    
+    console.log('Tracking notification dismissal:', dismissalData);
+    
+    const existingData = JSON.parse(localStorage.getItem('notificationTracking') || '[]');
+    existingData.push(dismissalData);
+    localStorage.setItem('notificationTracking', JSON.stringify(existingData));
+  } catch (error) {
+    console.error('Failed to track notification dismissal:', error);
+  }
+}
+
+// Basic fetch handler - just pass through to network
+self.addEventListener('fetch', (event) => {
+  return;
 });
