@@ -22,6 +22,11 @@ const urlBase64ToUint8Array = (base64String) => {
 
 // Request notification permission and register Web Push subscription
 export const requestNotificationPermission = async (userId) => {
+  console.log('🔔 STARTING requestNotificationPermission for user:', userId);
+  console.log('🔑 VAPID key available:', !!VAPID_PUBLIC_KEY);
+  console.log('🌐 Notification support:', 'Notification' in window);
+  console.log('⚙️ ServiceWorker support:', 'serviceWorker' in navigator);
+  
   try {
     console.log('🔔 Starting Web Push notification permission request for user:', userId);
     
