@@ -2,7 +2,7 @@ import { db } from './firebase/config';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 // VAPID public key from environment variable
-const VAPID_PUBLIC_KEY = process.env.REACT_APP_VAPID_PUBLIC_KEY;
+const VAPID_PUBLIC_KEY = 'BM4-b_OpkBfT9lsCF-hkKZNkrqYNBbD7mM-GOdKSrewExm3Xvt6QB-fFct-ect7kH3WA6G9kcGaRPcFvruA-064';
 
 // Convert VAPID key to Uint8Array
 const urlBase64ToUint8Array = (base64String) => {
