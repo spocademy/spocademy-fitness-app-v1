@@ -24,18 +24,20 @@ export default async function handler(req, res) {
     console.log('Auto-notifications triggered at India time:', indiaTime.toISOString(), 'Hour:', currentHour);
 
     // Determine notification type based on time
+    // Times: 5:30 AM IST, 4:30 PM IST, 8:30 PM IST
+    // Checking hour only (minutes will be 30 due to IST +5:30 offset)
     let notificationType = null;
     let notificationTime = '';
 
-    if (currentHour === 6) {
+    if (currentHour === 5) {
       notificationType = 'morning_motivation';
-      notificationTime = '6:00 AM';
+      notificationTime = '5:30 AM';
     } else if (currentHour === 16) {
       notificationType = 'evening_reminder';
-      notificationTime = '4:00 PM';
+      notificationTime = '4:30 PM';
     } else if (currentHour === 20) {
       notificationType = 'final_warning';
-      notificationTime = '8:00 PM';
+      notificationTime = '8:30 PM';
     } else {
       console.log('Not a scheduled notification time. Current hour:', currentHour);
       return res.status(200).json({
@@ -126,15 +128,15 @@ export default async function handler(req, res) {
 
       switch (notificationType) {
         case 'morning_motivation':
-          notificationTitle = '🌅 सुप्रभात!';
+          notificationTitle = 'सुप्रभात!';
           notificationBody = `सुप्रभात ${userName}! भरतीचं स्वप्न पूर्ण करायचं असेल तर मेहनत आणि त्याग आवश्यक आहे. Let's go!`;
           break;
         case 'evening_reminder':
-          notificationTitle = '👋 प्रशिक्षण आठवण';
+          notificationTitle = 'प्रशिक्षण आठवण';
           notificationBody = `नमस्कार ${userName}, दिवस ${currentDay} चे कॅलेंडर अजून पूर्ण करायचे बाकी आहे. व्यायाम सुरु करूया?`;
           break;
         case 'final_warning':
-          notificationTitle = '🚨 शेवटची आठवण!';
+          notificationTitle = 'शेवटची आठवण!';
           notificationBody = `शेवटची आठवण ${userName} - दिवस ${currentDay} पूर्ण करा आणि तुमची स्ट्रीक चालू ठेवा!`;
           break;
       }
