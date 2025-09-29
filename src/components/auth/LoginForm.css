@@ -30,7 +30,7 @@
 }
 
 .lang-toggle-floating:hover {
-  background: rgba(0, 127, 255, 1);
+  background: rgba(0, 127, 256, 1);
   transform: scale(1.05);
 }
 
