@@ -29,13 +29,13 @@ export default async function handler(req, res) {
     let notificationType = null;
     let notificationTime = '';
 
-    if (currentHour === 5) {
+    if (currentHour === 5 || currentHour === 6) {
       notificationType = 'morning_motivation';
       notificationTime = '5:30 AM';
-    } else if (currentHour === 16) {
+    } else if (currentHour === 16 || currentHour === 17) {
       notificationType = 'evening_reminder';
       notificationTime = '4:30 PM';
-    } else if (currentHour === 20) {
+    } else if (currentHour === 20 || currentHour === 21) {
       notificationType = 'final_warning';
       notificationTime = '8:30 PM';
     } else {
