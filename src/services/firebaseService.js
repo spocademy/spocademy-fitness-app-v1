@@ -376,7 +376,9 @@ export const createUser = async (userId, userData) => {
       lastActive: serverTimestamp(),
       currentDay: 1,
       points: 0,
-      streakCount: 0
+      streakCount: 0,
+      currentCampUnlocked: null,
+      attendedCamps: []
     });
   } catch (error) {
     console.error('Error creating user:', error);
@@ -398,7 +400,6 @@ export const updateUserProgress = async (userId, progressData) => {
 
 // ===== STREAK VALIDATION FUNCTIONS =====
 
-// MODIFIED: Now accepts any date parameter
 export const getTodayCompletion = async (userId, dateStr = null) => {
   try {
     const targetDate = dateStr || getIndiaDate().toISOString().split('T')[0];
@@ -415,24 +416,20 @@ export const getTodayCompletion = async (userId, dateStr = null) => {
   }
 };
 
-// NEW: Validate and fix user streak (call on Homepage load)
 export const validateUserStreak = async (userId) => {
   try {
     const userData = await getUserData(userId);
     if (!userData) return 0;
     
-    // If user already completed today, streak is current and valid
     const todayCompletion = await getTodayCompletion(userId);
     if (todayCompletion && todayCompletion.allTasksCompleted) {
       return userData.streakCount;
     }
     
-    // Check if they completed yesterday
     const yesterday = new Date(getIndiaDate().getTime() - 24 * 60 * 60 * 1000);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
     const yesterdayCompletion = await getTodayCompletion(userId, yesterdayStr);
     
-    // Reset streak if they missed yesterday and currently have a streak
     if (userData.streakCount > 0 && (!yesterdayCompletion || !yesterdayCompletion.allTasksCompleted)) {
       await updateUserProgress(userId, {
         streakCount: 0,
@@ -673,6 +670,244 @@ export const getDailyTasksForUser = async (level, currentDay) => {
   }
 };
 
+// ===== CAMP PLAN FUNCTIONS =====
+
+export const getCampPlan = async (campNumber) => {
+  try {
+    const campId = `camp${campNumber}`;
+    const campDoc = await getDoc(doc(db, 'campPlans', campId));
+    
+    if (campDoc.exists()) {
+      const campData = campDoc.data();
+      const campTasks = [];
+      
+      for (const taskPlan of campData.tasks || []) {
+        try {
+          const task = await getTask(taskPlan.taskId);
+          if (!task) continue;
+          
+          const campTask = {
+            id: task.id,
+            name: task.name,
+            type: task.type,
+            exerciseType: task.exerciseType || null,
+            reps: taskPlan.reps || null,
+            sets: taskPlan.sets || null,
+            restTime: taskPlan.restTime || null,
+            icon: getTaskIcon(task.type)
+          };
+          
+          campTasks.push(campTask);
+        } catch (error) {
+          console.error(`Error processing camp task ${taskPlan.taskId}:`, error);
+        }
+      }
+      
+      return { 
+        id: campDoc.id, 
+        campNumber,
+        tasks: campTasks 
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting camp plan:', error);
+    throw error;
+  }
+};
+
+export const createCampPlan = async (campNumber, tasksData) => {
+  try {
+    const campId = `camp${campNumber}`;
+    
+    const campData = {
+      campNumber,
+      tasks: tasksData,
+      createdAt: serverTimestamp()
+    };
+    
+    await setDoc(doc(db, 'campPlans', campId), campData);
+    console.log(`Created camp plan: ${campId}`, campData);
+    
+    return campId;
+  } catch (error) {
+    console.error('Error creating camp plan:', error);
+    throw error;
+  }
+};
+
+export const getAllCampPlans = async () => {
+  try {
+    const campsSnapshot = await getDocs(collection(db, 'campPlans'));
+    return campsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting all camp plans:', error);
+    throw error;
+  }
+};
+
+export const unlockCampForUser = async (userId, campNumber) => {
+  try {
+    await updateDoc(doc(db, 'users', userId), {
+      currentCampUnlocked: campNumber,
+      lastActive: serverTimestamp()
+    });
+    console.log(`Unlocked Camp ${campNumber} for user ${userId}`);
+  } catch (error) {
+    console.error('Error unlocking camp:', error);
+    throw error;
+  }
+};
+
+export const bulkUnlockCamp = async (userIds, campNumber) => {
+  try {
+    const promises = userIds.map(userId => 
+      updateDoc(doc(db, 'users', userId), {
+        currentCampUnlocked: campNumber,
+        lastActive: serverTimestamp()
+      })
+    );
+    
+    await Promise.all(promises);
+    console.log(`Bulk unlocked Camp ${campNumber} for ${userIds.length} users`);
+  } catch (error) {
+    console.error('Error bulk unlocking camp:', error);
+    throw error;
+  }
+};
+
+export const getTodayCampCompletion = async (userId, campNumber) => {
+  try {
+    const today = getIndiaDate();
+    const dateStr = today.toISOString().split('T')[0];
+    const completionId = `${userId}_camp${campNumber}_${dateStr}`;
+    
+    const completionDoc = await getDoc(doc(db, 'campCompletions', completionId));
+    if (completionDoc.exists()) {
+      return { id: completionDoc.id, ...completionDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting camp completion:', error);
+    return null;
+  }
+};
+
+export const saveCampTaskCompletion = async (userId, campNumber, taskId) => {
+  try {
+    const indiaDate = getIndiaDate();
+    const dateStr = indiaDate.toISOString().split('T')[0];
+    const completionId = `${userId}_camp${campNumber}_${dateStr}`;
+    
+    let completionData = await getTodayCampCompletion(userId, campNumber);
+    
+    if (!completionData) {
+      completionData = {
+        userId,
+        campNumber,
+        date: dateStr,
+        completedTasks: {},
+        allTasksCompleted: false,
+        createdAt: serverTimestamp()
+      };
+    }
+    
+    completionData.completedTasks[taskId] = {
+      completed: true,
+      completedAt: serverTimestamp()
+    };
+    
+    await setDoc(doc(db, 'campCompletions', completionId), {
+      ...completionData,
+      updatedAt: serverTimestamp()
+    });
+    
+    return completionData;
+  } catch (error) {
+    console.error('Error saving camp task completion:', error);
+    throw error;
+  }
+};
+
+export const checkAndUpdateCampCompletion = async (userId, campNumber, totalTasks) => {
+  try {
+    const todayCompletion = await getTodayCampCompletion(userId, campNumber);
+    
+    if (!todayCompletion) return false;
+    
+    const completedTaskCount = Object.keys(todayCompletion.completedTasks).length;
+    const allCompleted = completedTaskCount >= totalTasks;
+    
+    if (allCompleted && !todayCompletion.allTasksCompleted) {
+      const indiaDate = getIndiaDate();
+      const dateStr = indiaDate.toISOString().split('T')[0];
+      const completionId = `${userId}_camp${campNumber}_${dateStr}`;
+      
+      await updateDoc(doc(db, 'campCompletions', completionId), {
+        allTasksCompleted: true,
+        campCompletedAt: serverTimestamp()
+      });
+      
+      const userData = await getUserData(userId);
+      const attendedCamps = userData.attendedCamps || [];
+      
+      if (!attendedCamps.includes(campNumber)) {
+        await updateDoc(doc(db, 'users', userId), {
+          attendedCamps: [...attendedCamps, campNumber],
+          currentCampUnlocked: null,
+          lastActive: serverTimestamp()
+        });
+      }
+      
+      console.log(`User ${userId} completed Camp ${campNumber}`);
+      return true;
+    }
+    
+    return allCompleted;
+  } catch (error) {
+    console.error('Error checking camp completion:', error);
+    throw error;
+  }
+};
+
+export const getCampCompletionSummary = async () => {
+  try {
+    const usersSnapshot = await getDocs(
+      query(collection(db, 'users'), where('role', '!=', 'admin'))
+    );
+    
+    const summary = [];
+    
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      const userId = userDoc.id;
+      
+      if (userData.currentCampUnlocked !== null || (userData.attendedCamps && userData.attendedCamps.length > 0)) {
+        const userSummary = {
+          userId,
+          name: userData.name,
+          village: userData.village,
+          currentCampUnlocked: userData.currentCampUnlocked,
+          camp1: userData.attendedCamps?.includes(1) ? 'Yes' : 'No',
+          camp2: userData.attendedCamps?.includes(2) ? 'Yes' : 'No',
+          camp3: userData.attendedCamps?.includes(3) ? 'Yes' : 'No',
+          camp4: userData.attendedCamps?.includes(4) ? 'Yes' : 'No',
+          camp5: userData.attendedCamps?.includes(5) ? 'Yes' : 'No'
+        };
+        
+        summary.push(userSummary);
+      }
+    }
+    
+    return summary;
+    
+  } catch (error) {
+    console.error('Error getting camp completion summary:', error);
+    throw error;
+  }
+};
+
 // ===== DAILY COMPLETION TRACKING =====
 
 export const saveTaskCompletion = async (userId, taskId, currentDay) => {
@@ -734,7 +969,6 @@ export const checkAndUpdateDayCompletion = async (userId, currentDay, totalTasks
         await enableHydrationReminder(userId);
       }
       
-      // FIXED: Just increment streak instead of recalculating
       await updateUserDayCompletion(userId, currentDay);
       
       return true;
@@ -747,13 +981,11 @@ export const checkAndUpdateDayCompletion = async (userId, currentDay, totalTasks
   }
 };
 
-// FIXED: Now only increments streak by 1
 const updateUserDayCompletion = async (userId, completedDay) => {
   try {
     const userData = await getUserData(userId);
     if (!userData) return;
     
-    // Simply increment current streak by 1
     const newStreak = (userData.streakCount || 0) + 1;
     
     await updateUserProgress(userId, {

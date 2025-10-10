@@ -3,12 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { getVillageRankings, canUserTrainToday, validateUserStreak } from '../../services/firebaseService';
 import DailyPlanPage from '../daily/DailyPlanPage';
+import CampPlanPage from '../camp/CampPlanPage';
 import './Homepage.css';
 
 const Homepage = () => {
   const [language, setLanguage] = useState('mr');
   const [currentView, setCurrentView] = useState('homepage');
   const [selectedDay, setSelectedDay] = useState(null);
+  const [selectedCamp, setSelectedCamp] = useState(null);
   const [villageRankings, setVillageRankings] = useState([]);
   const [loadingRankings, setLoadingRankings] = useState(true);
   const [canTrainToday, setCanTrainToday] = useState(true);
@@ -52,7 +54,6 @@ const Homepage = () => {
 
   const t = text[language];
 
-  // Load village rankings on component mount
   useEffect(() => {
     const loadRankings = async () => {
       try {
@@ -68,21 +69,17 @@ const Homepage = () => {
     loadRankings();
   }, []);
 
-  // FIXED: Validate streak on app load and check training access
   useEffect(() => {
     const initializeUserData = async () => {
       if (!currentUser) return;
       
       try {
-        // 1. First validate and fix streak
         const correctedStreak = await validateUserStreak(currentUser.uid);
         setValidatedStreak(correctedStreak);
         
-        // 2. Then check if user can train today
         const canTrain = await canUserTrainToday(currentUser.uid);
         setCanTrainToday(canTrain);
         
-        // 3. Refresh user data if streak was corrected
         if (correctedStreak !== userData?.streakCount) {
           if (refreshUserData) {
             await refreshUserData();
@@ -97,32 +94,27 @@ const Homepage = () => {
     initializeUserData();
   }, [currentUser, userData?.streakCount, refreshUserData]);
 
-  // Calculate user stats with validated streak
   const userStats = {
     name: userData?.name || 'User',
     currentDay: userData?.currentDay || 1,
-    streak: validatedStreak, // Use validated streak instead of userData.streakCount
+    streak: validatedStreak,
     totalPoints: Math.min(userData?.points || 0, (userData?.currentDay || 1) - 1),
     village: userData?.village || 'Unknown'
   };
 
-  // Generate path days for display
   const generatePathDays = () => {
     const days = [];
     const currentDay = userStats.currentDay;
     
-    // Show previous completed days (up to 5)
     for (let i = Math.max(1, currentDay - 5); i < currentDay; i++) {
       days.push({ day: i, status: 'completed' });
     }
     
-    // Current day
     days.push({ 
       day: currentDay, 
       status: canTrainToday ? 'current' : 'completed-today'
     });
     
-    // Future locked days (up to 5)
     for (let i = currentDay + 1; i <= currentDay + 5; i++) {
       days.push({ day: i, status: 'locked' });
     }
@@ -132,7 +124,6 @@ const Homepage = () => {
 
   const pathDays = generatePathDays();
 
-  // Auto-scroll to current day
   useEffect(() => {
     if (currentView === 'homepage') {
       const scrollToCurrentDay = () => {
@@ -157,23 +148,27 @@ const Homepage = () => {
     }
   };
 
+  const handleCampClick = (campNumber, status) => {
+    if (status === 'current') {
+      setSelectedCamp(campNumber);
+      setCurrentView('campplan');
+    }
+  };
+
   const handleBackToHomepage = () => {
     setCurrentView('homepage');
     setSelectedDay(null);
+    setSelectedCamp(null);
     
-    // Refresh training access status and streak when returning
     const refreshAccess = async () => {
       if (currentUser) {
         try {
-          // Re-validate streak
           const correctedStreak = await validateUserStreak(currentUser.uid);
           setValidatedStreak(correctedStreak);
           
-          // Check training access
           const canTrain = await canUserTrainToday(currentUser.uid);
           setCanTrainToday(canTrain);
           
-          // Refresh user data
           if (refreshUserData) {
             await refreshUserData();
           }
@@ -197,10 +192,37 @@ const Homepage = () => {
     }
   };
 
+  const showCampPathway = typeof userData?.currentCampUnlocked === 'number' || 
+                         (userData?.attendedCamps && userData.attendedCamps.length > 0);
+
+  const getCampStatus = (campNumber) => {
+    const attendedCamps = userData?.attendedCamps || [];
+    const currentUnlocked = userData?.currentCampUnlocked;
+    
+    if (attendedCamps.includes(campNumber)) {
+      return 'completed';
+    }
+    
+    if (currentUnlocked === campNumber) {
+      return 'current';
+    }
+    
+    return 'locked';
+  };
+
   if (currentView === 'dailyplan') {
     return (
       <DailyPlanPage 
         day={selectedDay} 
+        onBack={handleBackToHomepage}
+      />
+    );
+  }
+
+  if (currentView === 'campplan') {
+    return (
+      <CampPlanPage 
+        campNumber={selectedCamp} 
         onBack={handleBackToHomepage}
       />
     );
@@ -279,6 +301,25 @@ const Homepage = () => {
             ))}
           </div>
         </div>
+
+        {showCampPathway && (
+          <div className="camp-pathway">
+            <div className="camp-container">
+              {[1, 2, 3, 4, 5].map((campNumber) => {
+                const status = getCampStatus(campNumber);
+                return (
+                  <div 
+                    key={campNumber}
+                    className={`camp-circle ${status}`}
+                    onClick={() => handleCampClick(campNumber, status)}
+                  >
+                    Camp {campNumber}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="village-section">
           <h3>{t.villageRankings}</h3>

@@ -233,6 +233,11 @@
   color: #6c757d;
 }
 
+.day-card.completed-today .day-circle {
+  background: #007fff;
+  color: white;
+}
+
 /* Action Button */
 .action-button {
   background: #007fff;
@@ -279,6 +284,66 @@
   background: #fcfdfe;
   color: #d63384;
   border: 1px solid #f5c2c7;
+}
+
+/* Camp Pathway */
+.camp-pathway {
+  background: white;
+  padding: 16px;
+  border-radius: 12px;
+  border: 2px solid #e9ecef;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.camp-container {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.camp-circle {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  transition: all 0.3s;
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.camp-circle.completed {
+  background: #28a745;
+  color: white;
+}
+
+.camp-circle.current {
+  background: #007fff;
+  color: white;
+  animation: pulse-camp 2s infinite;
+}
+
+@keyframes pulse-camp {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(0, 127, 255, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 8px 24px rgba(0, 127, 255, 0.5);
+    transform: scale(1.05);
+  }
+}
+
+.camp-circle.locked {
+  background: #e9ecef;
+  color: #6c757d;
+  cursor: not-allowed;
 }
 
 /* Village Section - Compact */
@@ -378,20 +443,6 @@
   border: 1px solid #007fff;
 }
 
-.rank {
-  width: 28px;
-  height: 28px;
-  background: #f8f9fa;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 14px;
-  margin-right: 12px;
-  flex-shrink: 0;
-}
-
 .ranking-row:first-child .rank {
   background: #ffd700;
   color: #333;
@@ -405,26 +456,6 @@
 .ranking-row:nth-child(3) .rank {
   background: #cd7f32;
   color: white;
-}
-
-.village-name {
-   font-weight: 600;
-  color: #4d4d4d;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 120px;
-  margin-right: -10px;
-  display: block;
-}
-
-.village-points {
-  font-size: 14px;
-  color: #6c757d;
-  font-weight: 500;
-  flex-shrink: 0;
-  min-width: 10px;
-  text-align: right;
 }
 
 /* Logout Button - High Contrast Visibility */
@@ -504,11 +535,6 @@
     height: 70px;
     font-size: 11px;
   }
-
-  .day-card.completed-today .day-circle {
-  background: #007fff;
-  color: white;
-}
   
   .action-button {
     font-size: 10px;
@@ -517,6 +543,12 @@
   
   .village-section {
     padding: 12px;
+  }
+
+  .camp-circle {
+    width: 64px;
+    height: 64px;
+    font-size: 13px;
   }
 }
 
@@ -540,4 +572,8 @@
 
 .stat-box:active {
   transform: scale(0.98);
+}
+
+.camp-circle:active {
+  transform: scale(0.95);
 }

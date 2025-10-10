@@ -16,6 +16,7 @@ import {
   getDailyPlan
 } from '../../services/firebaseService';
 import './AdminDashboard.css';
+import CampManagement from './CampManagement';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -721,7 +722,7 @@ const AdminDashboard = () => {
 
       <div className="admin-nav">
         <div className="nav-tabs">
-          {['dashboard', 'users', 'tasks', 'plans', 'schedule', 'notifications'].map(tab => (
+         {['dashboard', 'users', 'tasks', 'plans', 'schedule', 'camps', 'notifications'].map(tab => (
             <button 
               key={tab}
               className={`nav-tab ${activeTab === tab ? 'active' : ''}`}
@@ -1019,6 +1020,12 @@ const AdminDashboard = () => {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'camps' && (
+          <div className="camps-tab">
+            <CampManagement />
           </div>
         )}
 
@@ -1564,5 +1571,7 @@ const AdminDashboard = () => {
     </div>
   );
 };
+
+
 
 export default AdminDashboard;
