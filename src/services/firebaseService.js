@@ -25,6 +25,15 @@ const getIndiaDate = () => {
   return indiaTime;
 };
 
+// FIXED: Get India date string in YYYY-MM-DD format (using local India time, not UTC)
+const getIndiaDateString = (date = null) => {
+  const indiaDate = date || getIndiaDate();
+  const year = indiaDate.getFullYear();
+  const month = String(indiaDate.getMonth() + 1).padStart(2, '0');
+  const day = String(indiaDate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 // Get India day name
 const getIndiaDayName = () => {
   const indiaDate = getIndiaDate();
@@ -53,7 +62,7 @@ const isSameIndiaDay = (date1, date2) => {
 export const scheduleDailyNotifications = async (userId, userData) => {
   try {
     const today = getIndiaDate();
-    const dateStr = today.toISOString().split('T')[0];
+    const dateStr = getIndiaDateString(today); // FIXED: Use proper India date string
     
     const userNotificationDoc = await getDoc(doc(db, 'userNotifications', userId));
     if (!userNotificationDoc.exists() || !userNotificationDoc.data().fcmToken) {
@@ -120,7 +129,7 @@ export const scheduleDailyNotifications = async (userId, userData) => {
 export const enableHydrationReminder = async (userId) => {
   try {
     const today = getIndiaDate();
-    const dateStr = today.toISOString().split('T')[0];
+    const dateStr = getIndiaDateString(today); // FIXED: Use proper India date string
     const scheduleId = `${userId}_${dateStr}`;
     
     await updateDoc(doc(db, 'notificationSchedules', scheduleId), {
@@ -138,7 +147,7 @@ export const enableHydrationReminder = async (userId) => {
 export const markNotificationSent = async (userId, notificationType) => {
   try {
     const today = getIndiaDate();
-    const dateStr = today.toISOString().split('T')[0];
+    const dateStr = getIndiaDateString(today); // FIXED: Use proper India date string
     const scheduleId = `${userId}_${dateStr}`;
     
     await updateDoc(doc(db, 'notificationSchedules', scheduleId), {
@@ -155,7 +164,7 @@ export const getPendingNotifications = async () => {
   try {
     const now = getIndiaDate();
     const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const dateStr = now.toISOString().split('T')[0];
+    const dateStr = getIndiaDateString(now); // FIXED: Use proper India date string
     
     const schedulesSnapshot = await getDocs(
       query(
@@ -298,7 +307,7 @@ export const trackNotificationAnalytics = async (userId, type, status, extra = {
       type,
       status,
       timestamp: serverTimestamp(),
-      date: getIndiaDate().toISOString().split('T')[0],
+      date: getIndiaDateString(), // FIXED: Use proper India date string
       ...extra
     };
     
@@ -313,7 +322,7 @@ export const trackNotificationAnalytics = async (userId, type, status, extra = {
 export const getNotificationAnalytics = async (days = 7) => {
   try {
     const startDate = new Date(getIndiaDate().getTime() - days * 24 * 60 * 60 * 1000);
-    const startDateStr = startDate.toISOString().split('T')[0];
+    const startDateStr = getIndiaDateString(startDate); // FIXED: Use proper India date string
     
     const analyticsSnapshot = await getDocs(
       query(
@@ -402,7 +411,7 @@ export const updateUserProgress = async (userId, progressData) => {
 
 export const getTodayCompletion = async (userId, dateStr = null) => {
   try {
-    const targetDate = dateStr || getIndiaDate().toISOString().split('T')[0];
+    const targetDate = dateStr || getIndiaDateString(); // FIXED: Use proper India date string
     const completionId = `${userId}_${targetDate}`;
     
     const completionDoc = await getDoc(doc(db, 'dailyCompletions', completionId));
@@ -427,7 +436,7 @@ export const validateUserStreak = async (userId) => {
     }
     
     const yesterday = new Date(getIndiaDate().getTime() - 24 * 60 * 60 * 1000);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = getIndiaDateString(yesterday); // FIXED: Use proper India date string
     const yesterdayCompletion = await getTodayCompletion(userId, yesterdayStr);
     
     if (userData.streakCount > 0 && (!yesterdayCompletion || !yesterdayCompletion.allTasksCompleted)) {
@@ -780,7 +789,7 @@ export const bulkUnlockCamp = async (userIds, campNumber) => {
 export const getTodayCampCompletion = async (userId, campNumber) => {
   try {
     const today = getIndiaDate();
-    const dateStr = today.toISOString().split('T')[0];
+    const dateStr = getIndiaDateString(today); // FIXED: Use proper India date string
     const completionId = `${userId}_camp${campNumber}_${dateStr}`;
     
     const completionDoc = await getDoc(doc(db, 'campCompletions', completionId));
@@ -797,7 +806,7 @@ export const getTodayCampCompletion = async (userId, campNumber) => {
 export const saveCampTaskCompletion = async (userId, campNumber, taskId) => {
   try {
     const indiaDate = getIndiaDate();
-    const dateStr = indiaDate.toISOString().split('T')[0];
+    const dateStr = getIndiaDateString(indiaDate); // FIXED: Use proper India date string
     const completionId = `${userId}_camp${campNumber}_${dateStr}`;
     
     let completionData = await getTodayCampCompletion(userId, campNumber);
@@ -841,7 +850,7 @@ export const checkAndUpdateCampCompletion = async (userId, campNumber, totalTask
     
     if (allCompleted && !todayCompletion.allTasksCompleted) {
       const indiaDate = getIndiaDate();
-      const dateStr = indiaDate.toISOString().split('T')[0];
+      const dateStr = getIndiaDateString(indiaDate); // FIXED: Use proper India date string
       const completionId = `${userId}_camp${campNumber}_${dateStr}`;
       
       await updateDoc(doc(db, 'campCompletions', completionId), {
@@ -913,7 +922,7 @@ export const getCampCompletionSummary = async () => {
 export const saveTaskCompletion = async (userId, taskId, currentDay) => {
   try {
     const indiaDate = getIndiaDate();
-    const dateStr = indiaDate.toISOString().split('T')[0];
+    const dateStr = getIndiaDateString(indiaDate); // FIXED: Use proper India date string
     const completionId = `${userId}_${dateStr}`;
     
     let completionData = await getTodayCompletion(userId);
@@ -957,7 +966,7 @@ export const checkAndUpdateDayCompletion = async (userId, currentDay, totalTasks
     
     if (allCompleted && !todayCompletion.allTasksCompleted) {
       const indiaDate = getIndiaDate();
-      const dateStr = indiaDate.toISOString().split('T')[0];
+      const dateStr = getIndiaDateString(indiaDate); // FIXED: Use proper India date string
       const completionId = `${userId}_${dateStr}`;
       
       await updateDoc(doc(db, 'dailyCompletions', completionId), {
@@ -1024,7 +1033,7 @@ export const canUserTrainToday = async (userId) => {
 export const resetIncompleteDays = async () => {
   try {
     const yesterday = new Date(getIndiaDate().getTime() - 24 * 60 * 60 * 1000);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = getIndiaDateString(yesterday); // FIXED: Use proper India date string
     
     const completionsSnapshot = await getDocs(
       query(
