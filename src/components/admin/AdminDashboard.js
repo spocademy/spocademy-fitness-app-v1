@@ -17,6 +17,8 @@ import {
 } from '../../services/firebaseService';
 import './AdminDashboard.css';
 import CampManagement from './CampManagement';
+import AnalyticsDashboard from './AnalyticsDashboard';
+import { exportUsersToCSV } from '../../utils/exportUtils';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -675,6 +677,10 @@ const AdminDashboard = () => {
     });
   };
 
+  const handleExportUsers = () => {
+  exportUsersToCSV(users, `all-users-${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
   const handleLogout = async () => {
   const confirmLogout = window.confirm('Are you sure you want to logout?');
   if (confirmLogout) {
@@ -722,7 +728,7 @@ const AdminDashboard = () => {
 
       <div className="admin-nav">
         <div className="nav-tabs">
-         {['dashboard', 'users', 'tasks', 'plans', 'schedule', 'camps', 'notifications'].map(tab => (
+         {['dashboard', 'users', 'tasks', 'plans', 'schedule', 'camps', 'analytics', 'notifications'].map(tab => (
             <button 
               key={tab}
               className={`nav-tab ${activeTab === tab ? 'active' : ''}`}
@@ -902,8 +908,11 @@ const AdminDashboard = () => {
             </div>
 
             <div className="data-table">
-              <div className="table-header">
-                <div className="table-title">All Users ({users.length})</div>
+              <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px' }}>
+              <div className="table-title">All Users ({users.length})</div>
+                <button className="btn btn-primary" onClick={handleExportUsers} style={{ fontSize: '14px', padding: '8px 16px' }}>
+                 📥 Export All Users
+                </button>
               </div>
               <div className="table-row header">
                 <div>{renderSortableHeader('User', 'name')}</div>
@@ -1027,6 +1036,12 @@ const AdminDashboard = () => {
           <div className="camps-tab">
             <CampManagement />
           </div>
+        )}
+
+        {activeTab === 'analytics' && (
+         <div className="analytics-tab">
+           <AnalyticsDashboard />
+         </div>
         )}
 
         {activeTab === 'schedule' && (
