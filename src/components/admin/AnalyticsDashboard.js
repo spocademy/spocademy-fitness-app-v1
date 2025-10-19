@@ -89,7 +89,8 @@ const AnalyticsDashboard = () => {
   const fetchAnalytics = async (customFrom = null, customTo = null) => {
     try {
       setLoading(true);
-      const users = await getAllUsers();
+      const allUsers = await getAllUsers();
+        const users = allUsers.filter(user => user.status !== 'inactive');
       
       const today = getIndiaDate();
       const daysToAnalyze = getDaysInPeriod();

@@ -7,6 +7,8 @@ import {
   getAllUsers, 
   getUserStats, 
   createUser,
+  bulkUpdateUserStatus,
+  updateUserStatus,
   createTask,
   createDailyPlan,
   createWeeklySchedule,
@@ -84,6 +86,7 @@ const AdminDashboard = () => {
   const [sendingNotification, setSendingNotification] = useState(false);
   const [previewData, setPreviewData] = useState(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [showAdvancedTools, setShowAdvancedTools] = useState(false);
   const [duplicatePlanData, setDuplicatePlanData] = useState(null);
 
   // Sorting state
@@ -681,6 +684,47 @@ const AdminDashboard = () => {
   exportUsersToCSV(users, `all-users-${new Date().toISOString().split('T')[0]}.csv`);
   };
 
+  const handleBulkUpdateStatus = async () => {
+  const confirmUpdate = window.confirm('This will set all existing users to "active" status. This is a one-time setup. Continue?');
+  if (!confirmUpdate) return;
+  
+  try {
+    setLoading(true);
+    const result = await bulkUpdateUserStatus();
+    alert(`Success! Updated ${result.count} users to active status.`);
+    fetchAllData();
+  } catch (error) {
+    console.error('Error in bulk update:', error);
+    alert('Error updating users: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleToggleUserStatus = async (userId, currentStatus, userName) => {
+  const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+  const confirmMessage = `Are you sure you want to mark ${userName} as ${newStatus.toUpperCase()}?\n\n${
+    newStatus === 'inactive' 
+      ? 'This user will NOT be able to login and will be excluded from analytics.' 
+      : 'This user will be able to login again.'
+  }`;
+  
+  const confirmed = window.confirm(confirmMessage);
+  if (!confirmed) return;
+  
+  try {
+    setLoading(true);
+    await updateUserStatus(userId, newStatus);
+    alert(`${userName} is now ${newStatus}`);
+    fetchAllData();
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    alert('Error updating status: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
   const handleLogout = async () => {
   const confirmLogout = window.confirm('Are you sure you want to logout?');
   if (confirmLogout) {
@@ -788,6 +832,36 @@ const AdminDashboard = () => {
 
         {activeTab === 'users' && (
           <div className="users-tab">
+             {/* Advanced Tools Toggle */}
+              <div style={{ marginBottom: '20px', padding: '10px', background: '#f8f9fa', borderRadius: '6px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '14px' }}>
+               <input 
+                  type="checkbox" 
+                  checked={showAdvancedTools}
+                  onChange={(e) => setShowAdvancedTools(e.target.checked)}
+                  style={{ marginRight: '8px' }}
+              />
+             <span>Show Advanced Tools</span>
+             </label>
+            </div>
+
+            {/* Bulk Update Section */}
+            {showAdvancedTools && (
+             <div className="form-section" style={{ background: '#fff3cd', borderLeft: '4px solid #ffc107', marginBottom: '20px' }}>
+              <h3>⚙️ Bulk Operations</h3>
+              <p style={{ marginBottom: '15px', color: '#856404', fontSize: '14px' }}>
+               Set all existing users to "active" status. Use this for initial setup or bulk updates.
+             </p>
+             <button 
+              onClick={handleBulkUpdateStatus} 
+              className="btn btn-primary"
+              disabled={loading}
+             >
+             {loading ? 'Updating...' : 'Set All Users to Active'}
+             </button>
+             </div>
+           )}
+    
             <div className="form-section">
               <h3>Add New User</h3>
               <form onSubmit={handleCreateUser}>
@@ -921,25 +995,45 @@ const AdminDashboard = () => {
                 <div>{renderSortableHeader('Streak', 'streakCount')}</div>
                 <div>{renderSortableHeader('Village', 'village')}</div>
                 <div>{renderSortableHeader('Points', 'points')}</div>
+                <div>{renderSortableHeader('Status', 'status')}</div>
               </div>
+              
               {getSortedUsers().map(user => (
-                <div key={user.id} className="table-row">
-                  <div className="user-info">
-                    <div className="user-avatar">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="user-name">{user.name}</div>
-                      <div className="user-phone">{user.phone}</div>
-                    </div>
+              <div key={user.id} className="table-row">
+                <div className="user-info">
+                  <div className="user-avatar">
+                    {user.name.charAt(0).toUpperCase()}
                   </div>
-                  <div>{user.level}</div>
-                  <div>Day {user.currentDay || 1}</div>
-                  <div>{user.streakCount || 0} days</div>
-                  <div>{user.village}</div>
-                  <div>{user.points || 0} pts</div>
+                  <div>
+                    <div className="user-name">{user.name}</div>
+                    <div className="user-phone">{user.phone}</div>
+                  </div>
                 </div>
-              ))}
+                <div>{user.level}</div>
+                <div>Day {user.currentDay || 1}</div>
+                <div>{user.streakCount || 0} days</div>
+                <div>{user.village}</div>
+                <div>{user.points || 0} pts</div>
+                <div>
+                  <button
+                    onClick={() => handleToggleUserStatus(user.id, user.status || 'active', user.name)}
+                    className="btn"
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '11px',
+                      background: user.status === 'inactive' ? '#dc3545' : '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                    disabled={loading}
+                  >
+                    {user.status === 'inactive' ? 'Inactive' : 'Active'}
+                  </button>
+                </div>
+              </div>
+            ))}
             </div>
           </div>
         )}

@@ -22,7 +22,8 @@ const LoginForm = () => {
       invalidPhone: 'Please enter a valid 10-digit phone number',
       invalidCredentials: 'Invalid phone number or password',
       loggingIn: 'Logging in...',
-      required: 'This field is required'
+      required: 'This field is required',
+      accountInactive: 'Your account is inactive. Please contact support.'
     },
     mr: {
       welcome: 'स्वागत',
@@ -34,7 +35,8 @@ const LoginForm = () => {
       invalidPhone: 'कृपया वैध 10-अंकी फोन नंबर टाका',
       invalidCredentials: 'चुकीचा फोन नंबर किंवा पासवर्ड',
       loggingIn: 'लॉगिन करत आहे...',
-      required: 'हे फील्ड आवश्यक आहे'
+      required: 'हे फील्ड आवश्यक आहे',
+      accountInactive: 'तुमचे खाते निष्क्रिय आहे. कृपया सपोर्टशी संपर्क साधा.'
     }
   };
 
@@ -79,7 +81,12 @@ const LoginForm = () => {
       await login(phone, password);
     } catch (error) {
       console.error('Login error:', error);
-      setError(t.invalidCredentials);
+      
+      if (error.message === 'ACCOUNT_INACTIVE') {
+        setError(t.accountInactive);
+      } else {
+        setError(t.invalidCredentials);
+      }
     }
     
     setLoading(false);

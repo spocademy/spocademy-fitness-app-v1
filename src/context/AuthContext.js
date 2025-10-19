@@ -68,6 +68,13 @@ export const AuthProvider = ({ children }) => {
       
       // Fetch user data from Firestore
       const userDataFromDb = await getUserData(userCredential.user.uid);
+      
+      // Check if user is inactive
+      if (userDataFromDb && userDataFromDb.status === 'inactive') {
+        await signOut(auth);
+        throw new Error('ACCOUNT_INACTIVE');
+      }
+      
       setUserData(userDataFromDb);
       
       // Request notification permission after successful login
@@ -112,6 +119,12 @@ export const AuthProvider = ({ children }) => {
         const freshUserData = await getUserData(currentUser.uid);
         
         if (freshUserData) {
+          // Check if user became inactive
+          if (freshUserData.status === 'inactive') {
+            await logout();
+            return;
+          }
+          
           // Validate and fix data integrity
           const currentDay = freshUserData.currentDay || 1;
           const maxPossibleStreak = Math.max(0, currentDay - 1);
@@ -146,6 +159,15 @@ export const AuthProvider = ({ children }) => {
           const userDataFromDb = await getUserData(user.uid);
           
           if (userDataFromDb) {
+            // Check if user is inactive
+            if (userDataFromDb.status === 'inactive') {
+              await signOut(auth);
+              setCurrentUser(null);
+              setUserData(null);
+              setLoading(false);
+              return;
+            }
+            
             // Validate data on load
             const currentDay = userDataFromDb.currentDay || 1;
             const maxPossibleStreak = Math.max(0, currentDay - 1);

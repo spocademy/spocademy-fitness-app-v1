@@ -1158,3 +1158,40 @@ export const getUserStats = async () => {
     throw error;
   }
 };
+// ===== USER STATUS FUNCTIONS =====
+
+export const bulkUpdateUserStatus = async () => {
+  try {
+    const users = await getAllUsers();
+    let updateCount = 0;
+    
+    for (const user of users) {
+      // Only update if status field doesn't exist
+      if (!user.status) {
+        await updateDoc(doc(db, 'users', user.id), {
+          status: 'active'
+        });
+        updateCount++;
+      }
+    }
+    
+    console.log(`Updated ${updateCount} users to active status`);
+    return { success: true, count: updateCount };
+  } catch (error) {
+    console.error('Error bulk updating user status:', error);
+    throw error;
+  }
+};
+
+export const updateUserStatus = async (userId, status) => {
+  try {
+    await updateDoc(doc(db, 'users', userId), {
+      status: status,
+      statusUpdatedAt: serverTimestamp()
+    });
+    console.log(`User ${userId} status updated to ${status}`);
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    throw error;
+  }
+};
