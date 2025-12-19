@@ -14,7 +14,7 @@ const LoginForm = () => {
   const text = {
     en: {
       welcome: 'Welcome',
-      subtitle: 'Your personal fitness coach',
+      subtitle: 'Your personal fitness coach is ready!',
       phone: 'Phone Number',
       password: 'Password',
       login: 'Login',
@@ -27,7 +27,7 @@ const LoginForm = () => {
     },
     mr: {
       welcome: 'स्वागत',
-      subtitle: 'तुमचा वैयक्तिक फिटनेस प्रशिक्षक',
+      subtitle: 'तुमचा वैयक्तिक फिटनेस प्रशिक्षक तयार आहे!',
       phone: 'फोन नंबर',
       password: 'पासवर्ड',
       login: 'लॉगिन',

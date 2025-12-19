@@ -9,6 +9,7 @@ import {
   createUser,
   bulkUpdateUserStatus,
   updateUserStatus,
+  migrateUsersToUnlockedCamps,
   createTask,
   createDailyPlan,
   createWeeklySchedule,
@@ -1276,7 +1277,7 @@ const handleToggleUserStatus = async (userId, currentStatus, userName) => {
                     value={newPlan.week}
                     onChange={(e) => setNewPlan({...newPlan, week: parseInt(e.target.value)})}
                   >
-                    {[1,2,3,4,5,6,7,8,9,10].map(week => (
+                    {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map(week => (
                       <option key={week} value={week}>Week {week}</option>
                     ))}
                   </select>

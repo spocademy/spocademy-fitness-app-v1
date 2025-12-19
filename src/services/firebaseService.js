@@ -1158,6 +1158,7 @@ export const getUserStats = async () => {
     throw error;
   }
 };
+
 // ===== USER STATUS FUNCTIONS =====
 
 export const bulkUpdateUserStatus = async () => {
@@ -1192,6 +1193,45 @@ export const updateUserStatus = async (userId, status) => {
     console.log(`User ${userId} status updated to ${status}`);
   } catch (error) {
     console.error('Error updating user status:', error);
+    throw error;
+  }
+};
+
+export const migrateUsersToUnlockedCamps = async () => {
+  try {
+    const users = await getAllUsers();
+    let updateCount = 0;
+    
+    for (const user of users) {
+      // Skip if already has unlockedCamps array
+      if (user.unlockedCamps) continue;
+      
+      let unlockedCamps = [];
+      
+      // If user has currentCampUnlocked, add it to array
+      if (user.currentCampUnlocked) {
+        unlockedCamps.push(user.currentCampUnlocked);
+      }
+      
+      // If user completed camps, add those too
+      if (user.attendedCamps && user.attendedCamps.length > 0) {
+        user.attendedCamps.forEach(camp => {
+          if (!unlockedCamps.includes(camp)) {
+            unlockedCamps.push(camp);
+          }
+        });
+      }
+      
+      await updateDoc(doc(db, 'users', user.id), {
+        unlockedCamps: unlockedCamps
+      });
+      updateCount++;
+    }
+    
+    console.log(`Migrated ${updateCount} users to unlockedCamps array`);
+    return { success: true, count: updateCount };
+  } catch (error) {
+    console.error('Error migrating users:', error);
     throw error;
   }
 };
